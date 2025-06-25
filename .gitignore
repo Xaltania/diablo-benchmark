@@ -8,3 +8,5 @@ localImplementation/*.tar.gz
 diablo
 
 wallet/
+
+**/prepared_transactions/*
