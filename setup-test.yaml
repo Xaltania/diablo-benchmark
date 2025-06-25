@@ -1,0 +1,21 @@
+interface: "mock"
+
+parameters:
+  redundancy: 1
+
+endpoints:
+
+  - addresses:
+    - 10.40.1.2:9000
+    tags:
+    - 10.40.1.2
+    - 9000
+    - n1
+
+  - addresses:
+    - 10.40.1.1:9000
+    tags:
+    - 10.40.1.1
+    - 9000
+    - n0
+

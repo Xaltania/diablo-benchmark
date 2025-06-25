@@ -10,6 +10,7 @@ import (
 	"diablo-benchmark/blockchains/nethereum"
 	"diablo-benchmark/blockchains/nredundant"
 	"diablo-benchmark/blockchains/nsolana"
+	"diablo-benchmark/blockchains/ncardano"
 	"diablo-benchmark/core"
 	"encoding/json"
 	"fmt"
@@ -43,6 +44,7 @@ func buildSystemMap() map[string]core.BlockchainInterface {
 		"algorand":  nredundant.NewInterface(&nalgorand.BlockchainInterface{}),
 		"avalanche": nredundant.NewInterface(&navalanche.BlockchainInterface{}),
 		"aptos":     nredundant.NewInterface(&naptos.BlockchainInterface{}),
+		"cardano":   nredundant.NewInterface(&ncardano.BlockchainInterface{}),
 		"diem":      nredundant.NewInterface(&ndiem.BlockchainInterface{}),
 		"ethereum":  nredundant.NewInterface(&nethereum.BlockchainInterface{}),
 		"solana":    nredundant.NewInterface(&nsolana.BlockchainInterface{}),

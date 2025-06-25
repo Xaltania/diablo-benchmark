@@ -154,7 +154,7 @@ func (this *runtime) run() error {
 		go interaction.trigger()
 	}
 
-	timeout := 100 * time.Second
+	timeout := 30 * time.Second
 	Infof("sleep for %v seconds", timeout)
 	time.Sleep(timeout)
 

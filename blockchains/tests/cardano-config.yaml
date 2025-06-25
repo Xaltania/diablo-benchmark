@@ -1,0 +1,50 @@
+interface: "cardano"
+
+parameters:
+  redundancy: 1
+
+endpoints: # Not used yet
+- addresses:
+  - /home/ubuntu/cardano/cardano-node-tests/dev_workdir/state-cluster0/bft1.socket
+  - /home/ubuntu/cardano/cardano-node-tests/dev_workdir/state-cluster0/pool1.socket
+  - /home/ubuntu/cardano/cardano-node-tests/dev_workdir/state-cluster0/pool2.socket
+  - /home/ubuntu/cardano/cardano-node-tests/dev_workdir/state-cluster0/pool3.socket
+# sockets: # Update to JSON-RPC
+
+  # - 127.0.0.1:23000
+  # - 127.0.0.1:23005
+  # - 127.0.0.1:23010
+  # - 127.0.0.1:23015
+  tags:
+    - 127.0.0.1
+  
+
+# # Network configuration
+# network:
+#   magic: 42  # Testnet magic number
+#   era: "conway"     # Current era
+
+# # Account keys and addresses
+# keys:
+#   # Genesis/faucet account
+#   - address: "addr_test1vrlxauddas08r3awc2qq0af9hfu9r22fxzzsnzg7m3r63ggcme5pm"
+#     signing_key: "5820bd898146c7fe772d7363f5a689f04d95da1fc3c3db58c72e8b64336e8907fa8d"
+#     verification_key: "5820f1b2c3d4e5f6789a0b1c2d3e4f567890abcdef1234567890abcdef123456"
+#     role: "genesis"
+    
+#   # Owner accounts for benchmark operations
+#   - address: "addr_test1qz5ayaafjy6a5jgtl7a0mej7czv3jplhnp3tu3h32nv80uslvvta0s3ewh7r22xwfuszt0awzwk69q6mq9hhec5jx69q9zlkff"
+#     signing_key: "58201a2b3c4d5e6f7890abcdef1234567890abcdef1234567890abcdef1234567890"
+#     verification_key: "58209876543210fedcba0987654321fedcba0987654321fedcba0987654321fe"
+#     role: "owner"
+    
+#   - address: "addr_test1qp8z9x7y6w5v4u3t2s1r0q9p8o7n6m5l4k3j2h1g0f9e8d7c6b5a4938271605"
+#     signing_key: "5820abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+#     verification_key: "5820fedcba0987654321fedcba0987654321fedcba0987654321fedcba09876543"
+#     role: "owner"
+    
+#   - address: "addr_test1qq1x2y3z4a5b6c7d8e9f0g1h2i3j4k5l6m7n8o9p0q1r2s3t4u5v6w7x8y9z0a"
+#     signing_key: "58201234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+#     verification_key: "5820567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef12"
+#     role: "owner"
+    

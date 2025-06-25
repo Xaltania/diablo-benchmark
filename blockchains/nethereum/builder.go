@@ -1,6 +1,5 @@
 package nethereum
 
-
 import (
 	"bytes"
 	"context"
@@ -15,42 +14,40 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
-
 type BlockchainBuilder struct {
-	logger           core.Logger
-	client           *ethclient.Client
-	ctx              context.Context
-	premadeAccounts  []account
-	usedAccounts     int
-	compilers        []*solidityCompiler
-	applications     map[string]*application
-	manager          nonceManager
-	provider         parameterProvider
+	logger          core.Logger
+	client          *ethclient.Client
+	ctx             context.Context
+	premadeAccounts []account
+	usedAccounts    int
+	compilers       []*solidityCompiler
+	applications    map[string]*application
+	manager         nonceManager
+	provider        parameterProvider
 }
 
 type account struct {
-	address  common.Address
-	private  *ecdsa.PrivateKey
-	nonce    uint64
+	address common.Address
+	private *ecdsa.PrivateKey
+	nonce   uint64
 }
 
 type contract struct {
-	appli  *application
-	appid  common.Address
+	appli *application
+	appid common.Address
 }
-
 
 func newBuilder(logger core.Logger, client *ethclient.Client) *BlockchainBuilder {
 	return &BlockchainBuilder{
-		logger: logger,
-		client: client,
-		ctx: context.Background(),
+		logger:          logger,
+		client:          client,
+		ctx:             context.Background(),
 		premadeAccounts: make([]account, 0),
-		usedAccounts: 0,
-		compilers: make([]*solidityCompiler, 0),
-		applications: make(map[string]*application),
-		manager: newStaticNonceManager(logger, client),
-		provider: newLazyParameterProvider(client),
+		usedAccounts:    0,
+		compilers:       make([]*solidityCompiler, 0),
+		applications:    make(map[string]*application),
+		manager:         newStaticNonceManager(logger, client),
+		provider:        newLazyParameterProvider(client),
 	}
 }
 
@@ -58,7 +55,7 @@ func (this *BlockchainBuilder) addAccount(address common.Address, private *ecdsa
 	this.premadeAccounts = append(this.premadeAccounts, account{
 		address: address,
 		private: private,
-		nonce: 0,
+		nonce:   0,
 	})
 }
 
@@ -69,7 +66,6 @@ func (this *BlockchainBuilder) addCompiler(path string) {
 
 	this.compilers = append(this.compilers, compiler)
 }
-
 
 func (this *BlockchainBuilder) getBuilderAccount() (*account, error) {
 	if len(this.premadeAccounts) > 0 {
@@ -109,7 +105,6 @@ func (this *BlockchainBuilder) getApplication(name string) (*application, error)
 
 	return appli, nil
 }
-
 
 func (this *BlockchainBuilder) CreateAccount(int) (interface{}, error) {
 	var ret *account

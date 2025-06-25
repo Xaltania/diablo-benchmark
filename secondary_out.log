@@ -1,0 +1,1019 @@
+2025-06-18 04:16:41.139 DEBUG : connect to primary on tcp address: 127.0.0.1:5000
+2025-06-18 04:16:41.139 DEBUG : connected to primary on tcp address: 127.0.0.1:5000
+2025-06-18 04:16:41.139 DEBUG : use interface 'cardano'
+2025-06-18 04:16:41.139 DEBUG : prepare runtime
+2025-06-18 04:16:41.142 TRACE : create client 0
+2025-06-18 04:16:41.142 TRACE client[0]: new client
+2025-06-18 04:16:41.142 TRACE client[0]: using socket path: /home/ubuntu/cardano/cardano-node-tests/dev_workdir/state-cluster0/pool1.socket
+2025-06-18 04:16:41.145 TRACE : decode interaction for time 0.100 on client 0
+2025-06-18 04:16:41.145 TRACE : decode interaction for time 0.200 on client 0
+2025-06-18 04:16:41.145 TRACE : decode interaction for time 0.300 on client 0
+2025-06-18 04:16:41.145 TRACE : decode interaction for time 0.400 on client 0
+2025-06-18 04:16:41.145 TRACE : decode interaction for time 0.500 on client 0
+2025-06-18 04:16:41.145 TRACE : decode interaction for time 0.600 on client 0
+2025-06-18 04:16:41.145 TRACE : decode interaction for time 0.700 on client 0
+2025-06-18 04:16:41.145 TRACE : decode interaction for time 0.800 on client 0
+2025-06-18 04:16:41.145 TRACE : decode interaction for time 0.900 on client 0
+2025-06-18 04:16:41.145 TRACE : decode interaction for time 1.000 on client 0
+2025-06-18 04:16:41.145 TRACE : decode interaction for time 1.100 on client 0
+2025-06-18 04:16:41.145 TRACE : decode interaction for time 1.200 on client 0
+2025-06-18 04:16:41.145 TRACE : decode interaction for time 1.300 on client 0
+2025-06-18 04:16:41.145 TRACE : decode interaction for time 1.400 on client 0
+2025-06-18 04:16:41.145 TRACE : decode interaction for time 1.500 on client 0
+2025-06-18 04:16:41.145 TRACE : decode interaction for time 1.600 on client 0
+[TRACE] Decoding transaction bytes of length: 266
+2025-06-18 04:16:41.145 TRACE : decode interaction for time 1.700 on client 0
+2025-06-18 04:16:41.145 TRACE : decode interaction for time 1.800 on client 0
+2025-06-18 04:16:41.145 TRACE : decode interaction for time 1.900 on client 0
+2025-06-18 04:16:41.145 TRACE : decode interaction for time 2.000 on client 0
+2025-06-18 04:16:41.145 TRACE : decode interaction for time 2.100 on client 0
+2025-06-18 04:16:41.145 TRACE : decode interaction for time 2.200 on client 0
+2025-06-18 04:16:41.145 TRACE : decode interaction for time 2.300 on client 0
+2025-06-18 04:16:41.145 TRACE : decode interaction for time 2.400 on client 0
+2025-06-18 04:16:41.145 TRACE : decode interaction for time 2.500 on client 0
+2025-06-18 04:16:41.145 TRACE : decode interaction for time 2.600 on client 0
+2025-06-18 04:16:41.145 TRACE : decode interaction for time 2.700 on client 0
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: 89db9fdca23bc675108a04f2c93c16d12750b8a2d21f658d2992888c84c9f4f6
+2025-06-18 04:16:41.145 TRACE client[0]: decode transaction: 89db9fdca23bc675108a04f2c93c16d12750b8a2d21f658d2992888c84c9f4f6
+[TRACE] Decoding transaction bytes of length: 266
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: eb3521299237344ede96058c9f36c3c176fc55fa70b127667340c590641ac1a4
+2025-06-18 04:16:41.145 TRACE client[0]: decode transaction: eb3521299237344ede96058c9f36c3c176fc55fa70b127667340c590641ac1a4
+[TRACE] Transaction type: 6
+[TRACE] Decoding transaction bytes of length: 266
+[TRACE] Successfully decoded transaction with hash: 6297e0edc740a121d163f88ba56e8dcf9f0d9db00202a13c935c7ab206c242ae
+2025-06-18 04:16:41.145 TRACE client[0]: decode transaction: 6297e0edc740a121d163f88ba56e8dcf9f0d9db00202a13c935c7ab206c242ae
+[TRACE] Decoding transaction bytes of length: 266
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: 04367c232f248759393f92bba45bdcec5fcb99255e67abe74e6c6942754d9742
+2025-06-18 04:16:41.146 TRACE client[0]: decode transaction: 04367c232f248759393f92bba45bdcec5fcb99255e67abe74e6c6942754d9742
+[TRACE] Decoding transaction bytes of length: 266
+2025-06-18 04:16:41.146 WARN  client[0]: Chain reorganisation detected - rolling back to slot 1597
+[TRACE] Transaction type: 6
+2025-06-18 04:16:41.146 TRACE : decode interaction for time 2.800 on client 0
+2025-06-18 04:16:41.146 TRACE : decode interaction for time 2.900 on client 0
+[TRACE] Successfully decoded transaction with hash: e8122424b443db987e71f3534eb1378e20788c1a7002ab859a978378f6bd36c0
+2025-06-18 04:16:41.146 TRACE : decode interaction for time 3.000 on client 0
+[TRACE] Decoding transaction bytes of length: 266
+2025-06-18 04:16:41.146 TRACE : decode interaction for time 3.100 on client 0
+2025-06-18 04:16:41.146 TRACE : decode interaction for time 3.200 on client 0
+2025-06-18 04:16:41.146 TRACE : decode interaction for time 3.300 on client 0
+2025-06-18 04:16:41.146 TRACE : decode interaction for time 3.400 on client 0
+2025-06-18 04:16:41.146 TRACE : decode interaction for time 3.500 on client 0
+2025-06-18 04:16:41.146 TRACE : decode interaction for time 3.600 on client 0
+2025-06-18 04:16:41.146 TRACE : decode interaction for time 3.700 on client 0
+2025-06-18 04:16:41.146 TRACE : decode interaction for time 3.800 on client 0
+2025-06-18 04:16:41.146 TRACE : decode interaction for time 3.900 on client 0
+2025-06-18 04:16:41.146 TRACE : decode interaction for time 4.000 on client 0
+[TRACE] Transaction type: 6
+2025-06-18 04:16:41.146 TRACE : decode interaction for time 4.100 on client 0
+2025-06-18 04:16:41.146 TRACE : decode interaction for time 4.200 on client 0
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Successfully decoded transaction with hash: a12d41caaebd800e9926ffe3761e077050bc63c5660c78811ff59509a76d1c67
+2025-06-18 04:16:41.146 TRACE client[0]: decode transaction: a12d41caaebd800e9926ffe3761e077050bc63c5660c78811ff59509a76d1c67
+[TRACE] Decoding transaction bytes of length: 266
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: 513806cd9809f131032db2e903a46856a4a191886eee50af134a85354b48e63b
+2025-06-18 04:16:41.147 TRACE client[0]: decode transaction: 513806cd9809f131032db2e903a46856a4a191886eee50af134a85354b48e63b
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: 20a2da45f8efa567fe55fdf997986007ca900a9a8fb4c2a8faddf6525072e015
+2025-06-18 04:16:41.147 TRACE client[0]: decode transaction: 20a2da45f8efa567fe55fdf997986007ca900a9a8fb4c2a8faddf6525072e015
+[TRACE] Decoding transaction bytes of length: 266
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Decoding transaction bytes of length: 266
+[TRACE] Transaction type: 6
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: a323775c842967b0b14e66b4a9d154c1c5774596245168cda1fe053142296d4b
+2025-06-18 04:16:41.147 TRACE client[0]: decode transaction: a323775c842967b0b14e66b4a9d154c1c5774596245168cda1fe053142296d4b
+[TRACE] Successfully decoded transaction with hash: 238101a88c079c82d83ad395381a34157aa10df45b277aaee5b56a716267bec1
+2025-06-18 04:16:41.147 TRACE client[0]: decode transaction: 238101a88c079c82d83ad395381a34157aa10df45b277aaee5b56a716267bec1
+[TRACE] Transaction type: 6
+2025-06-18 04:16:41.146 TRACE client[0]: decode transaction: e8122424b443db987e71f3534eb1378e20788c1a7002ab859a978378f6bd36c0
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Decoding transaction bytes of length: 266
+[TRACE] Decoding transaction bytes of length: 266
+[TRACE] Decoding transaction bytes of length: 266
+[TRACE] Decoding transaction bytes of length: 266
+[TRACE] Decoding transaction bytes of length: 266
+[TRACE] Decoding transaction bytes of length: 266
+[TRACE] Decoding transaction bytes of length: 266
+[TRACE] Decoding transaction bytes of length: 266
+[TRACE] Transaction type: 6
+2025-06-18 04:16:41.149 TRACE : decode interaction for time 4.300 on client 0
+2025-06-18 04:16:41.149 TRACE : decode interaction for time 4.400 on client 0
+[TRACE] Successfully decoded transaction with hash: 852aa3241d767130c5cbe8fde52eadc449cdcd9f304db229afbafd76205fbfe1
+[TRACE] Decoding transaction bytes of length: 266
+2025-06-18 04:16:41.149 TRACE : decode interaction for time 4.500 on client 0
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 4.600 on client 0
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 4.700 on client 0
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 4.800 on client 0
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 4.900 on client 0
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 5.000 on client 0
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 5.100 on client 0
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 5.200 on client 0
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 5.300 on client 0
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 5.400 on client 0
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 5.500 on client 0
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 5.600 on client 0
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 5.700 on client 0
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 5.800 on client 0
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 5.900 on client 0
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 6.000 on client 0
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 6.100 on client 0
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 6.200 on client 0
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 6.300 on client 0
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 6.400 on client 0
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 6.500 on client 0
+[TRACE] Transaction type: 6
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 6.600 on client 0
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 6.700 on client 0
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 6.800 on client 0
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 6.900 on client 0
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 7.000 on client 0
+[TRACE] Successfully decoded transaction with hash: 712ae69f43a93d03f19f7d9212befae4fb1b284d459ab09638901a0989b3bd81
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 7.100 on client 0
+2025-06-18 04:16:41.150 TRACE client[0]: decode transaction: 712ae69f43a93d03f19f7d9212befae4fb1b284d459ab09638901a0989b3bd81
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 7.200 on client 0
+[TRACE] Transaction type: 6
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 7.300 on client 0
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 7.400 on client 0
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 7.500 on client 0
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 7.600 on client 0
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 7.700 on client 0
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 7.800 on client 0
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 7.900 on client 0
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 8.000 on client 0
+[TRACE] Successfully decoded transaction with hash: 6484a748333b72ff163c42ac6d97549a50ee6c1165ced00fcbfa1fc94adf746c
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 8.100 on client 0
+2025-06-18 04:16:41.150 TRACE client[0]: decode transaction: 6484a748333b72ff163c42ac6d97549a50ee6c1165ced00fcbfa1fc94adf746c
+[TRACE] Transaction type: 6
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 8.200 on client 0
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 8.300 on client 0
+2025-06-18 04:16:41.150 TRACE : decode interaction for time 8.400 on client 0
+[TRACE] Decoding transaction bytes of length: 266
+2025-06-18 04:16:41.151 TRACE : decode interaction for time 8.500 on client 0
+2025-06-18 04:16:41.151 TRACE : decode interaction for time 8.600 on client 0
+2025-06-18 04:16:41.151 TRACE : decode interaction for time 8.700 on client 0
+2025-06-18 04:16:41.151 TRACE : decode interaction for time 8.800 on client 0
+2025-06-18 04:16:41.151 TRACE : decode interaction for time 8.900 on client 0
+2025-06-18 04:16:41.151 TRACE : decode interaction for time 9.000 on client 0
+2025-06-18 04:16:41.151 TRACE : decode interaction for time 9.100 on client 0
+2025-06-18 04:16:41.151 TRACE : decode interaction for time 9.200 on client 0
+2025-06-18 04:16:41.151 TRACE : decode interaction for time 9.300 on client 0
+2025-06-18 04:16:41.151 TRACE : decode interaction for time 9.400 on client 0
+2025-06-18 04:16:41.151 TRACE : decode interaction for time 9.500 on client 0
+2025-06-18 04:16:41.151 TRACE : decode interaction for time 9.600 on client 0
+2025-06-18 04:16:41.151 TRACE : decode interaction for time 9.700 on client 0
+2025-06-18 04:16:41.151 TRACE : decode interaction for time 9.800 on client 0
+2025-06-18 04:16:41.151 TRACE : decode interaction for time 9.900 on client 0
+2025-06-18 04:16:41.151 TRACE : decode interaction for time 10.000 on client 0
+2025-06-18 04:16:41.151 DEBUG : runtime is ready
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Transaction type: 6
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: 6e32a2d557e0594a98c008be947ba1036a6712d1e18de090adae325b17ec646e
+[TRACE] Transaction type: 6
+2025-06-18 04:16:41.151 TRACE client[0]: decode transaction: 6e32a2d557e0594a98c008be947ba1036a6712d1e18de090adae325b17ec646e
+2025-06-18 04:16:41.150 TRACE client[0]: decode transaction: 852aa3241d767130c5cbe8fde52eadc449cdcd9f304db229afbafd76205fbfe1
+[TRACE] Successfully decoded transaction with hash: b45df0aeac1d63faa7c0cbe42d15a716ee4d72cb7bc81a7844596ff8446b992d
+[TRACE] Decoding transaction bytes of length: 267
+2025-06-18 04:16:41.151 TRACE client[0]: decode transaction: b45df0aeac1d63faa7c0cbe42d15a716ee4d72cb7bc81a7844596ff8446b992d
+[TRACE] Decoding transaction bytes of length: 266
+[TRACE] Successfully decoded transaction with hash: f2b817a7bcae098c643036ad30b3dbd94a299265d5fef38703e783d276426fdd
+2025-06-18 04:16:41.151 TRACE client[0]: decode transaction: f2b817a7bcae098c643036ad30b3dbd94a299265d5fef38703e783d276426fdd
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: c912344ab0c7c490ef1fa34c60aee0f7b62c50cf15bad564b88abbb69c51fc49
+2025-06-18 04:16:41.152 TRACE client[0]: decode transaction: c912344ab0c7c490ef1fa34c60aee0f7b62c50cf15bad564b88abbb69c51fc49
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Transaction type: 6
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Successfully decoded transaction with hash: edb3446cbb5c5e6a0de59aae970c70f76d69a3b09fc8e79c2c3fdac9014b69bc
+2025-06-18 04:16:41.152 TRACE client[0]: decode transaction: edb3446cbb5c5e6a0de59aae970c70f76d69a3b09fc8e79c2c3fdac9014b69bc
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Decoding transaction bytes of length: 266
+[TRACE] Transaction type: 6
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Transaction type: 6
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Transaction type: 6
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Transaction type: 6
+[TRACE] Transaction type: 6
+[TRACE] Transaction type: 6
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Transaction type: 6
+[TRACE] Transaction type: 6
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Successfully decoded transaction with hash: cbded9f28d6fb7b74293e7b76a4b11c8b560f1cff44dc4b39da009add1f31c04
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Decoding transaction bytes of length: 266
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Decoding transaction bytes of length: 266
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Decoding transaction bytes of length: 266
+[TRACE] Transaction type: 6
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: 72145d0b212223e893a8d4fa23c3f5783cbb638ecc21ca987257088bb77e58aa
+2025-06-18 04:16:41.153 TRACE client[0]: decode transaction: 72145d0b212223e893a8d4fa23c3f5783cbb638ecc21ca987257088bb77e58aa
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: f791b57c13787771ace26c0e65d48548defeb19758b9a2ade3451a4872dd36e5
+2025-06-18 04:16:41.153 TRACE client[0]: decode transaction: f791b57c13787771ace26c0e65d48548defeb19758b9a2ade3451a4872dd36e5
+[TRACE] Successfully decoded transaction with hash: b16bdba5fb277e717c1240a41b8757276ba52d0a70cf34c40bcc8ab0b33369db
+2025-06-18 04:16:41.153 TRACE client[0]: decode transaction: b16bdba5fb277e717c1240a41b8757276ba52d0a70cf34c40bcc8ab0b33369db
+2025-06-18 04:16:41.153 TRACE client[0]: decode transaction: cbded9f28d6fb7b74293e7b76a4b11c8b560f1cff44dc4b39da009add1f31c04
+[TRACE] Transaction type: 6
+[TRACE] Transaction type: 6
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Transaction type: 6
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Successfully decoded transaction with hash: 14fc58b367703ee21ccbf186fd3b95d8442a13941dd9a18920bcd0d1338af3ef
+2025-06-18 04:16:41.153 TRACE client[0]: decode transaction: 14fc58b367703ee21ccbf186fd3b95d8442a13941dd9a18920bcd0d1338af3ef
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Transaction type: 6
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Successfully decoded transaction with hash: 7f792463c6d7e0404fcd172f2083ca3b56ee3d9862b4cd68f202941c18462a03
+[TRACE] Successfully decoded transaction with hash: 81ff3959750199471c385626519d8bcf07b5b9ff1138cf7a2c5e5b030260657e
+2025-06-18 04:16:41.153 TRACE client[0]: decode transaction: 81ff3959750199471c385626519d8bcf07b5b9ff1138cf7a2c5e5b030260657e
+[TRACE] Transaction type: 6
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Successfully decoded transaction with hash: cbea3d54848cd04097473df59c9a8a402bc568fe4e29304fc420e50bf1ce0841
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: f47d59d06b9aee6f17efafaaf312cfe0a1c51a0365fa238777805efd345bbfb3
+[TRACE] Successfully decoded transaction with hash: 9cd34bec3029a2ac526977dc0a28c74c97cae997c1147556f0638bae7fa19316
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: 481f83c92d3456272f430d89512d1ea0b575d93fcf3b32392a6bb2020c0bee2e
+[TRACE] Transaction type: 6
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: a7c5829596229b9234058ba816822c065461b8db7a3c5338e7caed7f784f2217
+[TRACE] Successfully decoded transaction with hash: 61cf286da04e969a3d822bffb8cf2a85a7dbe27f83cd0771e4fcc02586c1fe61
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Successfully decoded transaction with hash: 4e64f52ce7ec184b97859a7811afc13e9620e652574d107158f3e1125b8ca1c3
+[TRACE] Transaction type: 6
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Transaction type: 6
+[TRACE] Transaction type: 6
+[TRACE] Decoding transaction bytes of length: 267
+2025-06-18 04:16:41.153 TRACE client[0]: decode transaction: 7f792463c6d7e0404fcd172f2083ca3b56ee3d9862b4cd68f202941c18462a03
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: c56c580654dde25db124cbcd02a61ce9c93294abc5f571afad242ea1ef0b130f
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Successfully decoded transaction with hash: cba93871cc4d362fcbe720620cb6bc2c12ec9685f7e01682186bd829c03bfd89
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Transaction type: 6
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: cf40995be8201951e159999e0106f7034fc9c88c3308417efe27f2bd276a3163
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Successfully decoded transaction with hash: 46b646b1179cf46bbbe96ac10fa70099293dd9906d1e91b85b8e4f6cc42c7333
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: f1a0ff119c7f18c5a5fdc9f89b21c9b4b1b8692ac4ebf7bdf66dfe1c9d1430f7
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Transaction type: 6
+[TRACE] Transaction type: 6
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Successfully decoded transaction with hash: 57aea83dc7889c4b66fa51ee0176bc28e1db0948cf851cb7cff8276fae5684a5
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: b581b4c47254aeb55fb2ab7c14b2aeb321c038add6c82abafed45678e409c223
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: 2266bc04d959bb0dc762c2e879b25aa78bada34084037b767b6c2ca7ff35ac0a
+[TRACE] Transaction type: 6
+[TRACE] Transaction type: 6
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: e6ff0bb36a87637f72e1f40a44208b35166777e82515b3936c25084ff9bd804c
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: 17cc68cb6f3f33bb99ef660bd59c68699c29d2c1f7553ef00b6690c0fe0106d5
+[TRACE] Successfully decoded transaction with hash: b223a7ed8bb4fc04ab2e85b4a8a4b839a1261100abd3415dfadd4e19c9301a46
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Successfully decoded transaction with hash: 2a352b6c774ab461c42cbc8ca84f415348c4cff7a8539068335e707f22f2055b
+[TRACE] Successfully decoded transaction with hash: 95790539c35878f6fadea60fa7052924eaac74d2a5ea778a28b7705e3f7b4754
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Transaction type: 6
+2025-06-18 04:16:41.153 TRACE client[0]: decode transaction: cbea3d54848cd04097473df59c9a8a402bc568fe4e29304fc420e50bf1ce0841
+2025-06-18 04:16:41.154 TRACE client[0]: decode transaction: f47d59d06b9aee6f17efafaaf312cfe0a1c51a0365fa238777805efd345bbfb3
+2025-06-18 04:16:41.154 TRACE client[0]: decode transaction: 9cd34bec3029a2ac526977dc0a28c74c97cae997c1147556f0638bae7fa19316
+2025-06-18 04:16:41.154 TRACE client[0]: decode transaction: 481f83c92d3456272f430d89512d1ea0b575d93fcf3b32392a6bb2020c0bee2e
+2025-06-18 04:16:41.154 TRACE client[0]: decode transaction: a7c5829596229b9234058ba816822c065461b8db7a3c5338e7caed7f784f2217
+2025-06-18 04:16:41.154 TRACE client[0]: decode transaction: 61cf286da04e969a3d822bffb8cf2a85a7dbe27f83cd0771e4fcc02586c1fe61
+2025-06-18 04:16:41.154 TRACE client[0]: decode transaction: 4e64f52ce7ec184b97859a7811afc13e9620e652574d107158f3e1125b8ca1c3
+2025-06-18 04:16:41.154 TRACE client[0]: decode transaction: c56c580654dde25db124cbcd02a61ce9c93294abc5f571afad242ea1ef0b130f
+2025-06-18 04:16:41.155 TRACE client[0]: decode transaction: cba93871cc4d362fcbe720620cb6bc2c12ec9685f7e01682186bd829c03bfd89
+[TRACE] Successfully decoded transaction with hash: faa834a6a00d1f733c63f84e177fa91262aa6d3fe6263c7978c20cc503cbb572
+[TRACE] Transaction type: 6
+2025-06-18 04:16:41.155 TRACE client[0]: decode transaction: cf40995be8201951e159999e0106f7034fc9c88c3308417efe27f2bd276a3163
+2025-06-18 04:16:41.155 TRACE client[0]: decode transaction: 46b646b1179cf46bbbe96ac10fa70099293dd9906d1e91b85b8e4f6cc42c7333
+2025-06-18 04:16:41.155 TRACE client[0]: decode transaction: f1a0ff119c7f18c5a5fdc9f89b21c9b4b1b8692ac4ebf7bdf66dfe1c9d1430f7
+2025-06-18 04:16:41.155 TRACE client[0]: decode transaction: 57aea83dc7889c4b66fa51ee0176bc28e1db0948cf851cb7cff8276fae5684a5
+2025-06-18 04:16:41.155 TRACE client[0]: decode transaction: b581b4c47254aeb55fb2ab7c14b2aeb321c038add6c82abafed45678e409c223
+2025-06-18 04:16:41.155 TRACE client[0]: decode transaction: 2266bc04d959bb0dc762c2e879b25aa78bada34084037b767b6c2ca7ff35ac0a
+2025-06-18 04:16:41.155 TRACE client[0]: decode transaction: e6ff0bb36a87637f72e1f40a44208b35166777e82515b3936c25084ff9bd804c
+2025-06-18 04:16:41.155 TRACE client[0]: decode transaction: 17cc68cb6f3f33bb99ef660bd59c68699c29d2c1f7553ef00b6690c0fe0106d5
+2025-06-18 04:16:41.155 TRACE client[0]: decode transaction: b223a7ed8bb4fc04ab2e85b4a8a4b839a1261100abd3415dfadd4e19c9301a46
+2025-06-18 04:16:41.155 TRACE client[0]: decode transaction: 2a352b6c774ab461c42cbc8ca84f415348c4cff7a8539068335e707f22f2055b
+2025-06-18 04:16:41.155 TRACE client[0]: decode transaction: 95790539c35878f6fadea60fa7052924eaac74d2a5ea778a28b7705e3f7b4754
+2025-06-18 04:16:41.156 TRACE client[0]: decode transaction: faa834a6a00d1f733c63f84e177fa91262aa6d3fe6263c7978c20cc503cbb572
+[TRACE] Transaction type: 6
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: 15f3e412a743e912c2ea103c189f6c2cd6e069d3f9650dccb0f94cb5f9f104f3
+2025-06-18 04:16:41.157 TRACE client[0]: decode transaction: 15f3e412a743e912c2ea103c189f6c2cd6e069d3f9650dccb0f94cb5f9f104f3
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: 8a12a113a8d16abdad2191e923631d24e3a1425594c64cbf6b1f657608e3d5b1
+2025-06-18 04:16:41.157 TRACE client[0]: decode transaction: 8a12a113a8d16abdad2191e923631d24e3a1425594c64cbf6b1f657608e3d5b1
+[TRACE] Successfully decoded transaction with hash: c99eae628b806e27223734e1b8b9d8c4dab366b4ffa59e4cd8468f92b4a5b820
+2025-06-18 04:16:41.157 TRACE client[0]: decode transaction: c99eae628b806e27223734e1b8b9d8c4dab366b4ffa59e4cd8468f92b4a5b820
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: 4eab62c5076927083cd260be1362c9107578a054a7228751998c6179ad977856
+2025-06-18 04:16:41.157 TRACE client[0]: decode transaction: 4eab62c5076927083cd260be1362c9107578a054a7228751998c6179ad977856
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: bc3a7cc4afbd5e07a1fe8d2ffbf004e6b6b487d6db2374371613591c7452dfc1
+2025-06-18 04:16:41.157 TRACE client[0]: decode transaction: bc3a7cc4afbd5e07a1fe8d2ffbf004e6b6b487d6db2374371613591c7452dfc1
+[TRACE] Successfully decoded transaction with hash: f33b58f05379b0b12f951128d218a9446d07151c4d3d0848167b4ec423194564
+2025-06-18 04:16:41.157 TRACE client[0]: decode transaction: f33b58f05379b0b12f951128d218a9446d07151c4d3d0848167b4ec423194564
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: 2be6ed9e33fb3fba6a399e163670dac8d0d50dfe3c9f97f30099ecf9ea1514b0
+2025-06-18 04:16:41.157 TRACE client[0]: decode transaction: 2be6ed9e33fb3fba6a399e163670dac8d0d50dfe3c9f97f30099ecf9ea1514b0
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: 738e31b1d12d764d3f8e2ecfded6862fa00f5945a4fb43e347179f526ae21d07
+2025-06-18 04:16:41.157 TRACE client[0]: decode transaction: 738e31b1d12d764d3f8e2ecfded6862fa00f5945a4fb43e347179f526ae21d07
+[TRACE] Successfully decoded transaction with hash: 9f052b18e19f07230b17475b142f61cc2e98d9d1365ef72306feba6e3b56dde1
+2025-06-18 04:16:41.157 TRACE client[0]: decode transaction: 9f052b18e19f07230b17475b142f61cc2e98d9d1365ef72306feba6e3b56dde1
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: 0f32f1a226f9457957014eb84a74ef3667380ad074b779c4244c70215faafeea
+2025-06-18 04:16:41.157 TRACE client[0]: decode transaction: 0f32f1a226f9457957014eb84a74ef3667380ad074b779c4244c70215faafeea
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Transaction type: 6
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: 7d92d4cf75ec9444a8587bffa233262bb6e9ba3f565d8ebdc786196b6f240042
+2025-06-18 04:16:41.157 TRACE client[0]: decode transaction: 7d92d4cf75ec9444a8587bffa233262bb6e9ba3f565d8ebdc786196b6f240042
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Successfully decoded transaction with hash: 66a118726c13aa595895a5b6b7f15616ef0b8c3de370b2dc01ef5877ff9645dd
+2025-06-18 04:16:41.158 TRACE client[0]: decode transaction: 66a118726c13aa595895a5b6b7f15616ef0b8c3de370b2dc01ef5877ff9645dd
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: 8044ad9b57fb32fb96b6acf878b0faf3aa69a9c46b56e5f931319cc41948aabd
+2025-06-18 04:16:41.158 TRACE client[0]: decode transaction: 8044ad9b57fb32fb96b6acf878b0faf3aa69a9c46b56e5f931319cc41948aabd
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: bcb3c5b1d730c84f2bacf148e926bea85f97d5c139ef1c69ad1c89c760283af6
+2025-06-18 04:16:41.158 TRACE client[0]: decode transaction: bcb3c5b1d730c84f2bacf148e926bea85f97d5c139ef1c69ad1c89c760283af6
+[TRACE] Transaction type: 6
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: 7af2971d3a2c6c8346a80bf695b80416fb52eba6afda81678176d0ce6941c78b
+2025-06-18 04:16:41.159 TRACE client[0]: decode transaction: 7af2971d3a2c6c8346a80bf695b80416fb52eba6afda81678176d0ce6941c78b
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: 85cfcd5d8e5779f7e2642996bdc93447cda6b72b5fef7b68ce200ba0587bb5d0
+2025-06-18 04:16:41.159 TRACE client[0]: decode transaction: 85cfcd5d8e5779f7e2642996bdc93447cda6b72b5fef7b68ce200ba0587bb5d0
+[TRACE] Transaction type: 6
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Successfully decoded transaction with hash: 58cbb0d352c441bf5f57deee3d73fe58ff4f45681341f04586e852d8de157b24
+2025-06-18 04:16:41.159 TRACE client[0]: decode transaction: 58cbb0d352c441bf5f57deee3d73fe58ff4f45681341f04586e852d8de157b24
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: 040fb2bdde98cb5ea1cd0782e800a189bea7142b875cce5eac703358370e2726
+2025-06-18 04:16:41.159 TRACE client[0]: decode transaction: 040fb2bdde98cb5ea1cd0782e800a189bea7142b875cce5eac703358370e2726
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: 327c523a03af6f539cecac7647e3223b393ae8527eb93344942a1f932f1925f3
+2025-06-18 04:16:41.159 TRACE client[0]: decode transaction: 327c523a03af6f539cecac7647e3223b393ae8527eb93344942a1f932f1925f3
+[TRACE] Successfully decoded transaction with hash: 302861b403fcba34eecd7ea62ddf5be5f8303660bf56a0784d4bebd385b60e34
+2025-06-18 04:16:41.159 TRACE client[0]: decode transaction: 302861b403fcba34eecd7ea62ddf5be5f8303660bf56a0784d4bebd385b60e34
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Transaction type: 6
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Successfully decoded transaction with hash: be1cdb8adddd805e99fdffa478f591cb987b1f7a56f697584264c5cdee6c574c
+2025-06-18 04:16:41.159 TRACE client[0]: decode transaction: be1cdb8adddd805e99fdffa478f591cb987b1f7a56f697584264c5cdee6c574c
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: 198d25efa1d63fcf3639fb666ddf5795bb9151115aaa4a806ae32555362db737
+2025-06-18 04:16:41.159 TRACE client[0]: decode transaction: 198d25efa1d63fcf3639fb666ddf5795bb9151115aaa4a806ae32555362db737
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: 6816fa1d97372f2f08b95a397106d6022c1048fc68974fc3221e2446686e96d6
+2025-06-18 04:16:41.159 TRACE client[0]: decode transaction: 6816fa1d97372f2f08b95a397106d6022c1048fc68974fc3221e2446686e96d6
+[TRACE] Successfully decoded transaction with hash: bcea67121404d38059d5fc4d57cb28d596b43ab5830cafa1d6c744b31920e97c
+2025-06-18 04:16:41.159 TRACE client[0]: decode transaction: bcea67121404d38059d5fc4d57cb28d596b43ab5830cafa1d6c744b31920e97c
+[TRACE] Successfully decoded transaction with hash: 9534f661278e24653fd8542ae958aa6fd03ce622310bdee404c524ef9f6264d3
+2025-06-18 04:16:41.159 TRACE client[0]: decode transaction: 9534f661278e24653fd8542ae958aa6fd03ce622310bdee404c524ef9f6264d3
+[TRACE] Successfully decoded transaction with hash: 54667c58a6ff1c2312e3223d4d24443cfac854089a26bc4ea89a96acfcfbc27d
+[TRACE] Decoding transaction bytes of length: 267
+2025-06-18 04:16:41.159 TRACE client[0]: decode transaction: 54667c58a6ff1c2312e3223d4d24443cfac854089a26bc4ea89a96acfcfbc27d
+[TRACE] Transaction type: 6
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Successfully decoded transaction with hash: a2f27936157bb014bfeaa72d0a18f6b2ae506bf64ecdb72b9dfb9e75e4c603e3
+2025-06-18 04:16:41.159 TRACE client[0]: decode transaction: a2f27936157bb014bfeaa72d0a18f6b2ae506bf64ecdb72b9dfb9e75e4c603e3
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: 6872e83bd8afc6e5f27e992f5ee0d23f611d4f6d99324e00199941b1081f3579
+2025-06-18 04:16:41.159 TRACE client[0]: decode transaction: 6872e83bd8afc6e5f27e992f5ee0d23f611d4f6d99324e00199941b1081f3579
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Transaction type: 6
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: a3fc2ff2f8fac61abb6f3962a16839263fa9182f69e79edad1b00754e3b9be8a
+2025-06-18 04:16:41.159 TRACE client[0]: decode transaction: a3fc2ff2f8fac61abb6f3962a16839263fa9182f69e79edad1b00754e3b9be8a
+[TRACE] Successfully decoded transaction with hash: dbeb5a95269ca2141465be65f3a5b402b845829f6712f9ba31728792731cd367
+[TRACE] Successfully decoded transaction with hash: 4ae8d5da59234adbe3df5e7beb5c61d088150fb50ed5f3c86e9c5a2bab72214d
+2025-06-18 04:16:41.159 TRACE client[0]: decode transaction: dbeb5a95269ca2141465be65f3a5b402b845829f6712f9ba31728792731cd367
+2025-06-18 04:16:41.159 TRACE client[0]: decode transaction: 4ae8d5da59234adbe3df5e7beb5c61d088150fb50ed5f3c86e9c5a2bab72214d
+[TRACE] Transaction type: 6
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Successfully decoded transaction with hash: 1fb5e07fee03b19dc2ce0a6b4818ce071577f20931aea6ebd9bf73b482657d94
+2025-06-18 04:16:41.159 TRACE client[0]: decode transaction: 1fb5e07fee03b19dc2ce0a6b4818ce071577f20931aea6ebd9bf73b482657d94
+[TRACE] Transaction type: 6
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: d7d2151e7ae885ef5a63bfa2c45fb274c68f1a142e27758375a4385227d97653
+2025-06-18 04:16:41.159 TRACE client[0]: decode transaction: d7d2151e7ae885ef5a63bfa2c45fb274c68f1a142e27758375a4385227d97653
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Successfully decoded transaction with hash: e0b3e2873ee99db41bf68cfb2890b04809cdc8365cbcd1eee7b033f9195380be
+[TRACE] Transaction type: 6
+2025-06-18 04:16:41.159 TRACE client[0]: decode transaction: e0b3e2873ee99db41bf68cfb2890b04809cdc8365cbcd1eee7b033f9195380be
+[TRACE] Successfully decoded transaction with hash: 84d35dda822453c20731c3b0b0413643ac3deaf6b83e08fb69bad158161888ab
+2025-06-18 04:16:41.159 TRACE client[0]: decode transaction: 84d35dda822453c20731c3b0b0413643ac3deaf6b83e08fb69bad158161888ab
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Successfully decoded transaction with hash: 57f0b283ad462e748e41c99ff593c1a780f406b9a6f556eb4278cd8cb337f451
+2025-06-18 04:16:41.160 TRACE client[0]: decode transaction: 57f0b283ad462e748e41c99ff593c1a780f406b9a6f556eb4278cd8cb337f451
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Transaction type: 6
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: e70bf3ebea16df929fa36933c23e57bccb27921ecea11caa54d9ca8cb52af7e3
+2025-06-18 04:16:41.160 TRACE client[0]: decode transaction: e70bf3ebea16df929fa36933c23e57bccb27921ecea11caa54d9ca8cb52af7e3
+[TRACE] Transaction type: 6
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: d5b172d00d9704db6ea43f264bc17d9d1beaac0e9757d87e89ea885dfb0ec72f
+2025-06-18 04:16:41.160 TRACE client[0]: decode transaction: d5b172d00d9704db6ea43f264bc17d9d1beaac0e9757d87e89ea885dfb0ec72f
+[TRACE] Successfully decoded transaction with hash: 691e08e843ce742aa43a3078af0749421e4a63dc0951d6cfd3df0b98c35a3d84
+[TRACE] Decoding transaction bytes of length: 267
+2025-06-18 04:16:41.160 TRACE client[0]: decode transaction: 691e08e843ce742aa43a3078af0749421e4a63dc0951d6cfd3df0b98c35a3d84
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: d3e515c84c887bcae170976e7c80117d59aa417c1b514be415622b390f190d61
+2025-06-18 04:16:41.160 TRACE client[0]: decode transaction: d3e515c84c887bcae170976e7c80117d59aa417c1b514be415622b390f190d61
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Transaction type: 6
+[TRACE] Transaction type: 6
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: f3fec5ffb4fe33902d8cbb6a3c04348babccbe6a9cd8c0d97450f2e27999a997
+2025-06-18 04:16:41.160 TRACE client[0]: decode transaction: f3fec5ffb4fe33902d8cbb6a3c04348babccbe6a9cd8c0d97450f2e27999a997
+[TRACE] Successfully decoded transaction with hash: 5a97d3b2e0de4fa6915da2d393f0d089dfa497313dd34532da9bb40fb39a3bb1
+[TRACE] Transaction type: 6
+2025-06-18 04:16:41.160 TRACE client[0]: decode transaction: 5a97d3b2e0de4fa6915da2d393f0d089dfa497313dd34532da9bb40fb39a3bb1
+[TRACE] Successfully decoded transaction with hash: 5bf199dba6d76ef89348ad36bccdc0485851636180a08ce5290461e6b9c905e6
+2025-06-18 04:16:41.160 TRACE client[0]: decode transaction: 5bf199dba6d76ef89348ad36bccdc0485851636180a08ce5290461e6b9c905e6
+[TRACE] Successfully decoded transaction with hash: 1f7337822a9706fe53adbb7da736d4614a0d03316bbd70fbc3587a2caf1ffb85
+2025-06-18 04:16:41.160 TRACE client[0]: decode transaction: 1f7337822a9706fe53adbb7da736d4614a0d03316bbd70fbc3587a2caf1ffb85
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: 44f1ec0b9bee00785ef76b784163ec4eca774e5563b76fc76f83122475719ec6
+2025-06-18 04:16:41.160 TRACE client[0]: decode transaction: 44f1ec0b9bee00785ef76b784163ec4eca774e5563b76fc76f83122475719ec6
+[TRACE] Successfully decoded transaction with hash: 2fc72d1d74cae6e25968b309b30da323ca07c14b691ba8a2e6cc977528a14a9b
+2025-06-18 04:16:41.160 TRACE client[0]: decode transaction: 2fc72d1d74cae6e25968b309b30da323ca07c14b691ba8a2e6cc977528a14a9b
+[TRACE] Successfully decoded transaction with hash: 72c409978c45718dbe442fb7f0630550e5e20acb0fa81faaab8ea2cff7ff77dd
+2025-06-18 04:16:41.160 TRACE client[0]: decode transaction: 72c409978c45718dbe442fb7f0630550e5e20acb0fa81faaab8ea2cff7ff77dd
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Successfully decoded transaction with hash: 040a2ca9a3477d7f38b7a7227381ae5010c70fba6d4853b3d79337b5a8dbe5c1
+2025-06-18 04:16:41.160 TRACE client[0]: decode transaction: 040a2ca9a3477d7f38b7a7227381ae5010c70fba6d4853b3d79337b5a8dbe5c1
+[TRACE] Successfully decoded transaction with hash: c221b09e08a6ebece4f7b10b2f38097b93114fec709723c16d2395596c916e73
+[TRACE] Transaction type: 6
+2025-06-18 04:16:41.160 TRACE client[0]: decode transaction: c221b09e08a6ebece4f7b10b2f38097b93114fec709723c16d2395596c916e73
+[TRACE] Successfully decoded transaction with hash: aab810c384d14690931a01234919c717c7ccdc555d73f617fdbfd6b0e685852a
+2025-06-18 04:16:41.161 TRACE client[0]: decode transaction: aab810c384d14690931a01234919c717c7ccdc555d73f617fdbfd6b0e685852a
+[TRACE] Decoding transaction bytes of length: 267
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: ae370b27308f6fbfc095c1d4f203815f14c4e94b2ccc614540c2f14d565eda52
+2025-06-18 04:16:41.161 TRACE client[0]: decode transaction: ae370b27308f6fbfc095c1d4f203815f14c4e94b2ccc614540c2f14d565eda52
+[TRACE] Successfully decoded transaction with hash: 90a0a42b2c9faebd1241453c70f95e4d836339b58b171d08acaea99c2af8ab7a
+2025-06-18 04:16:41.161 TRACE client[0]: decode transaction: 90a0a42b2c9faebd1241453c70f95e4d836339b58b171d08acaea99c2af8ab7a
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: bee36d6a8243bcf6b601486c9c8c69f8b4adaf815d02f748a8514e7631c1e181
+2025-06-18 04:16:41.161 TRACE client[0]: decode transaction: bee36d6a8243bcf6b601486c9c8c69f8b4adaf815d02f748a8514e7631c1e181
+[TRACE] Transaction type: 6
+[TRACE] Successfully decoded transaction with hash: bc213da17965f42de87e3a7f24b10dea2de41eca6c0fd38edcd298042ebdcabe
+2025-06-18 04:16:41.161 TRACE client[0]: decode transaction: bc213da17965f42de87e3a7f24b10dea2de41eca6c0fd38edcd298042ebdcabe
+2025-06-18 04:16:41.161 DEBUG : numDecoded = 0
+2025-06-18 04:16:41.161 TRACE : closed decode channel
+2025-06-18 04:16:41.161 TRACE : sort interactions
+2025-06-18 04:16:41.161 DEBUG : synchronize with primary
+2025-06-18 04:16:41.162 TRACE : wait for primary start signal
+2025-06-18 04:16:41.162 INFO  : run benchmark for 10.000 seconds
+2025-06-18 04:16:41.262 TRACE : trigger interaction 0xc0000ecd88 1/100
+2025-06-18 04:16:41.262 TRACE client[0]: Processing transaction with hash: 6297e0edc740a121d163f88ba56e8dcf9f0d9db00202a13c935c7ab206c242ae
+2025-06-18 04:16:41.262 DEBUG client[0]: Submitting transaction 6297e0edc740a121d163f88ba56e8dcf9f0d9db00202a13c935c7ab206c242ae
+2025-06-18 04:16:41.362 TRACE : trigger interaction 0xc0000ed688 2/100
+2025-06-18 04:16:41.362 TRACE client[0]: Processing transaction with hash: e8122424b443db987e71f3534eb1378e20788c1a7002ab859a978378f6bd36c0
+2025-06-18 04:16:41.362 DEBUG client[0]: Submitting transaction e8122424b443db987e71f3534eb1378e20788c1a7002ab859a978378f6bd36c0
+2025-06-18 04:16:41.404 TRACE client[0]: Found transaction in block: 6297e0edc740a121d163f88ba56e8dcf9f0d9db00202a13c935c7ab206c242ae
+2025-06-18 04:16:41.404 TRACE client[0]: Found transaction in block: e8122424b443db987e71f3534eb1378e20788c1a7002ab859a978378f6bd36c0
+2025-06-18 04:16:41.462 TRACE : trigger interaction 0xc000695688 3/100
+2025-06-18 04:16:41.462 TRACE client[0]: Processing transaction with hash: 9f052b18e19f07230b17475b142f61cc2e98d9d1365ef72306feba6e3b56dde1
+2025-06-18 04:16:41.462 DEBUG client[0]: Submitting transaction 9f052b18e19f07230b17475b142f61cc2e98d9d1365ef72306feba6e3b56dde1
+2025-06-18 04:16:41.562 TRACE : trigger interaction 0xc000560008 4/100
+2025-06-18 04:16:41.562 TRACE client[0]: Processing transaction with hash: a323775c842967b0b14e66b4a9d154c1c5774596245168cda1fe053142296d4b
+2025-06-18 04:16:41.562 DEBUG client[0]: Submitting transaction a323775c842967b0b14e66b4a9d154c1c5774596245168cda1fe053142296d4b
+2025-06-18 04:16:41.662 TRACE : trigger interaction 0xc0000ed208 5/100
+2025-06-18 04:16:41.662 TRACE client[0]: Processing transaction with hash: b16bdba5fb277e717c1240a41b8757276ba52d0a70cf34c40bcc8ab0b33369db
+2025-06-18 04:16:41.662 DEBUG client[0]: Submitting transaction b16bdba5fb277e717c1240a41b8757276ba52d0a70cf34c40bcc8ab0b33369db
+2025-06-18 04:16:41.763 TRACE : trigger interaction 0xc0000ec488 6/100
+2025-06-18 04:16:41.763 TRACE client[0]: Processing transaction with hash: 89db9fdca23bc675108a04f2c93c16d12750b8a2d21f658d2992888c84c9f4f6
+2025-06-18 04:16:41.763 DEBUG client[0]: Submitting transaction 89db9fdca23bc675108a04f2c93c16d12750b8a2d21f658d2992888c84c9f4f6
+2025-06-18 04:16:41.863 TRACE : trigger interaction 0xc0004f4d88 7/100
+2025-06-18 04:16:41.863 TRACE client[0]: Processing transaction with hash: 04367c232f248759393f92bba45bdcec5fcb99255e67abe74e6c6942754d9742
+2025-06-18 04:16:41.863 DEBUG client[0]: Submitting transaction 04367c232f248759393f92bba45bdcec5fcb99255e67abe74e6c6942754d9742
+2025-06-18 04:16:41.962 TRACE : trigger interaction 0xc0004f5688 8/100
+2025-06-18 04:16:41.962 TRACE client[0]: Processing transaction with hash: a12d41caaebd800e9926ffe3761e077050bc63c5660c78811ff59509a76d1c67
+2025-06-18 04:16:41.962 DEBUG client[0]: Submitting transaction a12d41caaebd800e9926ffe3761e077050bc63c5660c78811ff59509a76d1c67
+2025-06-18 04:16:42.062 TRACE : trigger interaction 0xc000695d48 9/100
+2025-06-18 04:16:42.062 TRACE client[0]: Processing transaction with hash: 9534f661278e24653fd8542ae958aa6fd03ce622310bdee404c524ef9f6264d3
+2025-06-18 04:16:42.062 DEBUG client[0]: Submitting transaction 9534f661278e24653fd8542ae958aa6fd03ce622310bdee404c524ef9f6264d3
+2025-06-18 04:16:42.162 TRACE : trigger interaction 0xc0001a78c8 10/100
+2025-06-18 04:16:42.162 TRACE client[0]: Processing transaction with hash: b45df0aeac1d63faa7c0cbe42d15a716ee4d72cb7bc81a7844596ff8446b992d
+2025-06-18 04:16:42.162 DEBUG client[0]: Submitting transaction b45df0aeac1d63faa7c0cbe42d15a716ee4d72cb7bc81a7844596ff8446b992d
+2025-06-18 04:16:42.206 TRACE client[0]: Found transaction in block: 9f052b18e19f07230b17475b142f61cc2e98d9d1365ef72306feba6e3b56dde1
+2025-06-18 04:16:42.206 TRACE client[0]: Found transaction in block: a323775c842967b0b14e66b4a9d154c1c5774596245168cda1fe053142296d4b
+2025-06-18 04:16:42.206 TRACE client[0]: Found transaction in block: b16bdba5fb277e717c1240a41b8757276ba52d0a70cf34c40bcc8ab0b33369db
+2025-06-18 04:16:42.206 TRACE client[0]: Found transaction in block: 89db9fdca23bc675108a04f2c93c16d12750b8a2d21f658d2992888c84c9f4f6
+2025-06-18 04:16:42.206 TRACE client[0]: Found transaction in block: 04367c232f248759393f92bba45bdcec5fcb99255e67abe74e6c6942754d9742
+2025-06-18 04:16:42.206 TRACE client[0]: Found transaction in block: a12d41caaebd800e9926ffe3761e077050bc63c5660c78811ff59509a76d1c67
+2025-06-18 04:16:42.206 TRACE client[0]: Found transaction in block: 9534f661278e24653fd8542ae958aa6fd03ce622310bdee404c524ef9f6264d3
+2025-06-18 04:16:42.206 TRACE client[0]: Found transaction in block: b45df0aeac1d63faa7c0cbe42d15a716ee4d72cb7bc81a7844596ff8446b992d
+2025-06-18 04:16:42.262 TRACE : trigger interaction 0xc0004f58c8 11/100
+2025-06-18 04:16:42.262 TRACE client[0]: Processing transaction with hash: 6484a748333b72ff163c42ac6d97549a50ee6c1165ced00fcbfa1fc94adf746c
+2025-06-18 04:16:42.262 DEBUG client[0]: Submitting transaction 6484a748333b72ff163c42ac6d97549a50ee6c1165ced00fcbfa1fc94adf746c
+2025-06-18 04:16:42.362 TRACE : trigger interaction 0xc0004f4248 12/100
+2025-06-18 04:16:42.362 TRACE client[0]: Processing transaction with hash: 84d35dda822453c20731c3b0b0413643ac3deaf6b83e08fb69bad158161888ab
+2025-06-18 04:16:42.362 DEBUG client[0]: Submitting transaction 84d35dda822453c20731c3b0b0413643ac3deaf6b83e08fb69bad158161888ab
+2025-06-18 04:16:42.462 TRACE : trigger interaction 0xc0004f5d48 13/100
+2025-06-18 04:16:42.462 TRACE client[0]: Processing transaction with hash: 81ff3959750199471c385626519d8bcf07b5b9ff1138cf7a2c5e5b030260657e
+2025-06-18 04:16:42.462 DEBUG client[0]: Submitting transaction 81ff3959750199471c385626519d8bcf07b5b9ff1138cf7a2c5e5b030260657e
+2025-06-18 04:16:42.563 TRACE : trigger interaction 0xc000561208 14/100
+2025-06-18 04:16:42.563 TRACE client[0]: Processing transaction with hash: 61cf286da04e969a3d822bffb8cf2a85a7dbe27f83cd0771e4fcc02586c1fe61
+2025-06-18 04:16:42.563 DEBUG client[0]: Submitting transaction 61cf286da04e969a3d822bffb8cf2a85a7dbe27f83cd0771e4fcc02586c1fe61
+2025-06-18 04:16:42.663 TRACE : trigger interaction 0xc000561688 15/100
+2025-06-18 04:16:42.663 TRACE client[0]: Processing transaction with hash: 040a2ca9a3477d7f38b7a7227381ae5010c70fba6d4853b3d79337b5a8dbe5c1
+2025-06-18 04:16:42.663 DEBUG client[0]: Submitting transaction 040a2ca9a3477d7f38b7a7227381ae5010c70fba6d4853b3d79337b5a8dbe5c1
+2025-06-18 04:16:42.763 TRACE : trigger interaction 0xc000561b08 16/100
+2025-06-18 04:16:42.763 TRACE client[0]: Processing transaction with hash: 6e32a2d557e0594a98c008be947ba1036a6712d1e18de090adae325b17ec646e
+2025-06-18 04:16:42.763 DEBUG client[0]: Submitting transaction 6e32a2d557e0594a98c008be947ba1036a6712d1e18de090adae325b17ec646e
+2025-06-18 04:16:42.863 TRACE : trigger interaction 0xc0004f46c8 17/100
+2025-06-18 04:16:42.863 TRACE client[0]: Processing transaction with hash: 852aa3241d767130c5cbe8fde52eadc449cdcd9f304db229afbafd76205fbfe1
+2025-06-18 04:16:42.863 DEBUG client[0]: Submitting transaction 852aa3241d767130c5cbe8fde52eadc449cdcd9f304db229afbafd76205fbfe1
+2025-06-18 04:16:42.963 TRACE : trigger interaction 0xc00036fd48 18/100
+2025-06-18 04:16:42.963 TRACE client[0]: Processing transaction with hash: cbded9f28d6fb7b74293e7b76a4b11c8b560f1cff44dc4b39da009add1f31c04
+2025-06-18 04:16:42.963 DEBUG client[0]: Submitting transaction cbded9f28d6fb7b74293e7b76a4b11c8b560f1cff44dc4b39da009add1f31c04
+2025-06-18 04:16:43.062 TRACE : trigger interaction 0xc0004f5208 19/100
+2025-06-18 04:16:43.063 TRACE client[0]: Processing transaction with hash: 712ae69f43a93d03f19f7d9212befae4fb1b284d459ab09638901a0989b3bd81
+2025-06-18 04:16:43.063 DEBUG client[0]: Submitting transaction 712ae69f43a93d03f19f7d9212befae4fb1b284d459ab09638901a0989b3bd81
+2025-06-18 04:16:43.162 TRACE : trigger interaction 0xc000470d88 20/100
+2025-06-18 04:16:43.162 TRACE client[0]: Processing transaction with hash: 15f3e412a743e912c2ea103c189f6c2cd6e069d3f9650dccb0f94cb5f9f104f3
+2025-06-18 04:16:43.162 DEBUG client[0]: Submitting transaction 15f3e412a743e912c2ea103c189f6c2cd6e069d3f9650dccb0f94cb5f9f104f3
+2025-06-18 04:16:43.262 TRACE : trigger interaction 0xc000694248 21/100
+2025-06-18 04:16:43.262 TRACE client[0]: Processing transaction with hash: edb3446cbb5c5e6a0de59aae970c70f76d69a3b09fc8e79c2c3fdac9014b69bc
+2025-06-18 04:16:43.262 DEBUG client[0]: Submitting transaction edb3446cbb5c5e6a0de59aae970c70f76d69a3b09fc8e79c2c3fdac9014b69bc
+2025-06-18 04:16:43.362 TRACE : trigger interaction 0xc000695208 22/100
+2025-06-18 04:16:43.362 TRACE client[0]: Processing transaction with hash: f33b58f05379b0b12f951128d218a9446d07151c4d3d0848167b4ec423194564
+2025-06-18 04:16:43.362 DEBUG client[0]: Submitting transaction f33b58f05379b0b12f951128d218a9446d07151c4d3d0848167b4ec423194564
+2025-06-18 04:16:43.462 TRACE : trigger interaction 0xc0001a7688 23/100
+2025-06-18 04:16:43.462 TRACE client[0]: Processing transaction with hash: e0b3e2873ee99db41bf68cfb2890b04809cdc8365cbcd1eee7b033f9195380be
+2025-06-18 04:16:43.462 DEBUG client[0]: Submitting transaction e0b3e2873ee99db41bf68cfb2890b04809cdc8365cbcd1eee7b033f9195380be
+2025-06-18 04:16:43.563 TRACE : trigger interaction 0xc0003cb688 24/100
+2025-06-18 04:16:43.563 TRACE client[0]: Processing transaction with hash: 57aea83dc7889c4b66fa51ee0176bc28e1db0948cf851cb7cff8276fae5684a5
+2025-06-18 04:16:43.563 DEBUG client[0]: Submitting transaction 57aea83dc7889c4b66fa51ee0176bc28e1db0948cf851cb7cff8276fae5684a5
+2025-06-18 04:16:43.663 TRACE : trigger interaction 0xc0005606c8 25/100
+2025-06-18 04:16:43.663 TRACE client[0]: Processing transaction with hash: 302861b403fcba34eecd7ea62ddf5be5f8303660bf56a0784d4bebd385b60e34
+2025-06-18 04:16:43.663 DEBUG client[0]: Submitting transaction 302861b403fcba34eecd7ea62ddf5be5f8303660bf56a0784d4bebd385b60e34
+2025-06-18 04:16:43.762 TRACE : trigger interaction 0xc0005618c8 26/100
+2025-06-18 04:16:43.763 TRACE client[0]: Processing transaction with hash: c99eae628b806e27223734e1b8b9d8c4dab366b4ffa59e4cd8468f92b4a5b820
+2025-06-18 04:16:43.763 DEBUG client[0]: Submitting transaction c99eae628b806e27223734e1b8b9d8c4dab366b4ffa59e4cd8468f92b4a5b820
+2025-06-18 04:16:43.863 TRACE : trigger interaction 0xc0004f4488 27/100
+2025-06-18 04:16:43.863 TRACE client[0]: Processing transaction with hash: eb3521299237344ede96058c9f36c3c176fc55fa70b127667340c590641ac1a4
+2025-06-18 04:16:43.863 DEBUG client[0]: Submitting transaction eb3521299237344ede96058c9f36c3c176fc55fa70b127667340c590641ac1a4
+2025-06-18 04:16:43.962 TRACE : trigger interaction 0xc00036efc8 28/100
+2025-06-18 04:16:43.962 TRACE client[0]: Processing transaction with hash: 20a2da45f8efa567fe55fdf997986007ca900a9a8fb4c2a8faddf6525072e015
+2025-06-18 04:16:43.962 DEBUG client[0]: Submitting transaction 20a2da45f8efa567fe55fdf997986007ca900a9a8fb4c2a8faddf6525072e015
+2025-06-18 04:16:44.062 TRACE : trigger interaction 0xc00036f8c8 29/100
+2025-06-18 04:16:44.062 TRACE client[0]: Processing transaction with hash: 238101a88c079c82d83ad395381a34157aa10df45b277aaee5b56a716267bec1
+2025-06-18 04:16:44.062 DEBUG client[0]: Submitting transaction 238101a88c079c82d83ad395381a34157aa10df45b277aaee5b56a716267bec1
+2025-06-18 04:16:44.162 TRACE : trigger interaction 0xc000694b48 30/100
+2025-06-18 04:16:44.162 TRACE client[0]: Processing transaction with hash: e70bf3ebea16df929fa36933c23e57bccb27921ecea11caa54d9ca8cb52af7e3
+2025-06-18 04:16:44.162 DEBUG client[0]: Submitting transaction e70bf3ebea16df929fa36933c23e57bccb27921ecea11caa54d9ca8cb52af7e3
+2025-06-18 04:16:44.262 TRACE : trigger interaction 0xc000772b48 31/100
+2025-06-18 04:16:44.262 TRACE client[0]: Processing transaction with hash: cba93871cc4d362fcbe720620cb6bc2c12ec9685f7e01682186bd829c03bfd89
+2025-06-18 04:16:44.262 DEBUG client[0]: Submitting transaction cba93871cc4d362fcbe720620cb6bc2c12ec9685f7e01682186bd829c03bfd89
+2025-06-18 04:16:44.362 TRACE : trigger interaction 0xc0001a7b08 32/100
+2025-06-18 04:16:44.362 TRACE client[0]: Processing transaction with hash: 2266bc04d959bb0dc762c2e879b25aa78bada34084037b767b6c2ca7ff35ac0a
+2025-06-18 04:16:44.362 DEBUG client[0]: Submitting transaction 2266bc04d959bb0dc762c2e879b25aa78bada34084037b767b6c2ca7ff35ac0a
+2025-06-18 04:16:44.462 TRACE : trigger interaction 0xc0004706c8 33/100
+2025-06-18 04:16:44.463 TRACE client[0]: Processing transaction with hash: b223a7ed8bb4fc04ab2e85b4a8a4b839a1261100abd3415dfadd4e19c9301a46
+2025-06-18 04:16:44.463 DEBUG client[0]: Submitting transaction b223a7ed8bb4fc04ab2e85b4a8a4b839a1261100abd3415dfadd4e19c9301a46
+2025-06-18 04:16:44.563 TRACE : trigger interaction 0xc000694008 34/100
+2025-06-18 04:16:44.563 TRACE client[0]: Processing transaction with hash: 2a352b6c774ab461c42cbc8ca84f415348c4cff7a8539068335e707f22f2055b
+2025-06-18 04:16:44.563 DEBUG client[0]: Submitting transaction 2a352b6c774ab461c42cbc8ca84f415348c4cff7a8539068335e707f22f2055b
+2025-06-18 04:16:44.663 TRACE : trigger interaction 0xc0000ecb48 35/100
+2025-06-18 04:16:44.663 TRACE client[0]: Processing transaction with hash: 1f7337822a9706fe53adbb7da736d4614a0d03316bbd70fbc3587a2caf1ffb85
+2025-06-18 04:16:44.663 DEBUG client[0]: Submitting transaction 1f7337822a9706fe53adbb7da736d4614a0d03316bbd70fbc3587a2caf1ffb85
+2025-06-18 04:16:44.762 TRACE : trigger interaction 0xc0003ca008 36/100
+2025-06-18 04:16:44.762 TRACE client[0]: Processing transaction with hash: 85cfcd5d8e5779f7e2642996bdc93447cda6b72b5fef7b68ce200ba0587bb5d0
+2025-06-18 04:16:44.762 DEBUG client[0]: Submitting transaction 85cfcd5d8e5779f7e2642996bdc93447cda6b72b5fef7b68ce200ba0587bb5d0
+2025-06-18 04:16:44.863 TRACE : trigger interaction 0xc0004f4908 37/100
+2025-06-18 04:16:44.863 TRACE client[0]: Processing transaction with hash: 7f792463c6d7e0404fcd172f2083ca3b56ee3d9862b4cd68f202941c18462a03
+2025-06-18 04:16:44.863 DEBUG client[0]: Submitting transaction 7f792463c6d7e0404fcd172f2083ca3b56ee3d9862b4cd68f202941c18462a03
+2025-06-18 04:16:44.963 TRACE : trigger interaction 0xc0003c2fc8 38/100
+2025-06-18 04:16:44.963 TRACE client[0]: Processing transaction with hash: 5a97d3b2e0de4fa6915da2d393f0d089dfa497313dd34532da9bb40fb39a3bb1
+2025-06-18 04:16:44.963 DEBUG client[0]: Submitting transaction 5a97d3b2e0de4fa6915da2d393f0d089dfa497313dd34532da9bb40fb39a3bb1
+2025-06-18 04:16:45.063 TRACE : trigger interaction 0xc0004f5448 39/100
+2025-06-18 04:16:45.063 TRACE client[0]: Processing transaction with hash: bcb3c5b1d730c84f2bacf148e926bea85f97d5c139ef1c69ad1c89c760283af6
+2025-06-18 04:16:45.063 DEBUG client[0]: Submitting transaction bcb3c5b1d730c84f2bacf148e926bea85f97d5c139ef1c69ad1c89c760283af6
+2025-06-18 04:16:45.163 TRACE : trigger interaction 0xc000695b08 40/100
+2025-06-18 04:16:45.163 TRACE client[0]: Processing transaction with hash: 4e64f52ce7ec184b97859a7811afc13e9620e652574d107158f3e1125b8ca1c3
+2025-06-18 04:16:45.163 DEBUG client[0]: Submitting transaction 4e64f52ce7ec184b97859a7811afc13e9620e652574d107158f3e1125b8ca1c3
+2025-06-18 04:16:45.263 TRACE : trigger interaction 0xc0003ca248 41/100
+2025-06-18 04:16:45.263 TRACE client[0]: Processing transaction with hash: 66a118726c13aa595895a5b6b7f15616ef0b8c3de370b2dc01ef5877ff9645dd
+2025-06-18 04:16:45.263 DEBUG client[0]: Submitting transaction 66a118726c13aa595895a5b6b7f15616ef0b8c3de370b2dc01ef5877ff9645dd
+2025-06-18 04:16:45.362 TRACE : trigger interaction 0xc0003ca488 42/100
+2025-06-18 04:16:45.362 TRACE client[0]: Processing transaction with hash: 513806cd9809f131032db2e903a46856a4a191886eee50af134a85354b48e63b
+2025-06-18 04:16:45.362 DEBUG client[0]: Submitting transaction 513806cd9809f131032db2e903a46856a4a191886eee50af134a85354b48e63b
+2025-06-18 04:16:45.462 TRACE : trigger interaction 0xc000772488 43/100
+2025-06-18 04:16:45.462 TRACE client[0]: Processing transaction with hash: 5bf199dba6d76ef89348ad36bccdc0485851636180a08ce5290461e6b9c905e6
+2025-06-18 04:16:45.462 DEBUG client[0]: Submitting transaction 5bf199dba6d76ef89348ad36bccdc0485851636180a08ce5290461e6b9c905e6
+2025-06-18 04:16:45.562 TRACE : trigger interaction 0xc0007f9688 44/100
+2025-06-18 04:16:45.562 TRACE client[0]: Processing transaction with hash: 72c409978c45718dbe442fb7f0630550e5e20acb0fa81faaab8ea2cff7ff77dd
+2025-06-18 04:16:45.562 DEBUG client[0]: Submitting transaction 72c409978c45718dbe442fb7f0630550e5e20acb0fa81faaab8ea2cff7ff77dd
+2025-06-18 04:16:45.663 TRACE : trigger interaction 0xc00036eb48 45/100
+2025-06-18 04:16:45.663 TRACE client[0]: Processing transaction with hash: 9cd34bec3029a2ac526977dc0a28c74c97cae997c1147556f0638bae7fa19316
+2025-06-18 04:16:45.663 DEBUG client[0]: Submitting transaction 9cd34bec3029a2ac526977dc0a28c74c97cae997c1147556f0638bae7fa19316
+2025-06-18 04:16:45.763 TRACE : trigger interaction 0xc0000ec008 46/100
+2025-06-18 04:16:45.763 TRACE client[0]: Processing transaction with hash: c912344ab0c7c490ef1fa34c60aee0f7b62c50cf15bad564b88abbb69c51fc49
+2025-06-18 04:16:45.763 DEBUG client[0]: Submitting transaction c912344ab0c7c490ef1fa34c60aee0f7b62c50cf15bad564b88abbb69c51fc49
+2025-06-18 04:16:45.863 TRACE : trigger interaction 0xc000560488 47/100
+2025-06-18 04:16:45.863 TRACE client[0]: Processing transaction with hash: cbea3d54848cd04097473df59c9a8a402bc568fe4e29304fc420e50bf1ce0841
+2025-06-18 04:16:45.863 DEBUG client[0]: Submitting transaction cbea3d54848cd04097473df59c9a8a402bc568fe4e29304fc420e50bf1ce0841
+2025-06-18 04:16:45.963 TRACE : trigger interaction 0xc0002da488 48/100
+2025-06-18 04:16:45.963 TRACE client[0]: Processing transaction with hash: 1fb5e07fee03b19dc2ce0a6b4818ce071577f20931aea6ebd9bf73b482657d94
+2025-06-18 04:16:45.963 DEBUG client[0]: Submitting transaction 1fb5e07fee03b19dc2ce0a6b4818ce071577f20931aea6ebd9bf73b482657d94
+2025-06-18 04:16:46.062 TRACE : trigger interaction 0xc0003c3d48 49/100
+2025-06-18 04:16:46.062 TRACE client[0]: Processing transaction with hash: ae370b27308f6fbfc095c1d4f203815f14c4e94b2ccc614540c2f14d565eda52
+2025-06-18 04:16:46.062 DEBUG client[0]: Submitting transaction ae370b27308f6fbfc095c1d4f203815f14c4e94b2ccc614540c2f14d565eda52
+2025-06-18 04:16:46.162 TRACE : trigger interaction 0xc0000ec908 50/100
+2025-06-18 04:16:46.162 TRACE client[0]: Processing transaction with hash: be1cdb8adddd805e99fdffa478f591cb987b1f7a56f697584264c5cdee6c574c
+2025-06-18 04:16:46.162 DEBUG client[0]: Submitting transaction be1cdb8adddd805e99fdffa478f591cb987b1f7a56f697584264c5cdee6c574c
+2025-06-18 04:16:46.262 TRACE : trigger interaction 0xc0004f4fc8 51/100
+2025-06-18 04:16:46.262 TRACE client[0]: Processing transaction with hash: d5b172d00d9704db6ea43f264bc17d9d1beaac0e9757d87e89ea885dfb0ec72f
+2025-06-18 04:16:46.262 DEBUG client[0]: Submitting transaction d5b172d00d9704db6ea43f264bc17d9d1beaac0e9757d87e89ea885dfb0ec72f
+2025-06-18 04:16:46.362 TRACE : trigger interaction 0xc000695448 52/100
+2025-06-18 04:16:46.362 TRACE client[0]: Processing transaction with hash: 691e08e843ce742aa43a3078af0749421e4a63dc0951d6cfd3df0b98c35a3d84
+2025-06-18 04:16:46.362 DEBUG client[0]: Submitting transaction 691e08e843ce742aa43a3078af0749421e4a63dc0951d6cfd3df0b98c35a3d84
+2025-06-18 04:16:46.462 TRACE : trigger interaction 0xc000414908 53/100
+2025-06-18 04:16:46.462 TRACE client[0]: Processing transaction with hash: 2be6ed9e33fb3fba6a399e163670dac8d0d50dfe3c9f97f30099ecf9ea1514b0
+2025-06-18 04:16:46.462 DEBUG client[0]: Submitting transaction 2be6ed9e33fb3fba6a399e163670dac8d0d50dfe3c9f97f30099ecf9ea1514b0
+2025-06-18 04:16:46.562 TRACE : trigger interaction 0xc000560fc8 54/100
+2025-06-18 04:16:46.562 TRACE client[0]: Processing transaction with hash: 8a12a113a8d16abdad2191e923631d24e3a1425594c64cbf6b1f657608e3d5b1
+2025-06-18 04:16:46.562 DEBUG client[0]: Submitting transaction 8a12a113a8d16abdad2191e923631d24e3a1425594c64cbf6b1f657608e3d5b1
+2025-06-18 04:16:46.662 TRACE : trigger interaction 0xc00036fb08 55/100
+2025-06-18 04:16:46.662 TRACE client[0]: Processing transaction with hash: 040fb2bdde98cb5ea1cd0782e800a189bea7142b875cce5eac703358370e2726
+2025-06-18 04:16:46.662 DEBUG client[0]: Submitting transaction 040fb2bdde98cb5ea1cd0782e800a189bea7142b875cce5eac703358370e2726
+2025-06-18 04:16:46.762 TRACE : trigger interaction 0xc000560d88 56/100
+2025-06-18 04:16:46.762 TRACE client[0]: Processing transaction with hash: 481f83c92d3456272f430d89512d1ea0b575d93fcf3b32392a6bb2020c0bee2e
+2025-06-18 04:16:46.762 DEBUG client[0]: Submitting transaction 481f83c92d3456272f430d89512d1ea0b575d93fcf3b32392a6bb2020c0bee2e
+2025-06-18 04:16:46.862 TRACE : trigger interaction 0xc000414008 57/100
+2025-06-18 04:16:46.862 TRACE client[0]: Processing transaction with hash: 57f0b283ad462e748e41c99ff593c1a780f406b9a6f556eb4278cd8cb337f451
+2025-06-18 04:16:46.862 DEBUG client[0]: Submitting transaction 57f0b283ad462e748e41c99ff593c1a780f406b9a6f556eb4278cd8cb337f451
+2025-06-18 04:16:46.963 TRACE : trigger interaction 0xc0007726c8 58/100
+2025-06-18 04:16:46.963 TRACE client[0]: Processing transaction with hash: a7c5829596229b9234058ba816822c065461b8db7a3c5338e7caed7f784f2217
+2025-06-18 04:16:46.963 DEBUG client[0]: Submitting transaction a7c5829596229b9234058ba816822c065461b8db7a3c5338e7caed7f784f2217
+2025-06-18 04:16:47.063 TRACE : trigger interaction 0xc000471448 59/100
+2025-06-18 04:16:47.063 TRACE client[0]: Processing transaction with hash: d7d2151e7ae885ef5a63bfa2c45fb274c68f1a142e27758375a4385227d97653
+2025-06-18 04:16:47.063 DEBUG client[0]: Submitting transaction d7d2151e7ae885ef5a63bfa2c45fb274c68f1a142e27758375a4385227d97653
+2025-06-18 04:16:47.162 TRACE : trigger interaction 0xc0004966c8 60/100
+2025-06-18 04:16:47.163 TRACE client[0]: Processing transaction with hash: 327c523a03af6f539cecac7647e3223b393ae8527eb93344942a1f932f1925f3
+2025-06-18 04:16:47.163 DEBUG client[0]: Submitting transaction 327c523a03af6f539cecac7647e3223b393ae8527eb93344942a1f932f1925f3
+2025-06-18 04:16:47.262 TRACE : trigger interaction 0xc0003c2008 61/100
+2025-06-18 04:16:47.262 TRACE client[0]: Processing transaction with hash: 90a0a42b2c9faebd1241453c70f95e4d836339b58b171d08acaea99c2af8ab7a
+2025-06-18 04:16:47.262 DEBUG client[0]: Submitting transaction 90a0a42b2c9faebd1241453c70f95e4d836339b58b171d08acaea99c2af8ab7a
+2025-06-18 04:16:47.362 TRACE : trigger interaction 0xc000772fc8 62/100
+2025-06-18 04:16:47.362 TRACE client[0]: Processing transaction with hash: c221b09e08a6ebece4f7b10b2f38097b93114fec709723c16d2395596c916e73
+2025-06-18 04:16:47.362 DEBUG client[0]: Submitting transaction c221b09e08a6ebece4f7b10b2f38097b93114fec709723c16d2395596c916e73
+2025-06-18 04:16:47.462 TRACE : trigger interaction 0xc000694d88 63/100
+2025-06-18 04:16:47.462 TRACE client[0]: Processing transaction with hash: dbeb5a95269ca2141465be65f3a5b402b845829f6712f9ba31728792731cd367
+2025-06-18 04:16:47.462 DEBUG client[0]: Submitting transaction dbeb5a95269ca2141465be65f3a5b402b845829f6712f9ba31728792731cd367
+2025-06-18 04:16:47.562 TRACE : trigger interaction 0xc000414b48 64/100
+2025-06-18 04:16:47.562 TRACE client[0]: Processing transaction with hash: c56c580654dde25db124cbcd02a61ce9c93294abc5f571afad242ea1ef0b130f
+2025-06-18 04:16:47.562 DEBUG client[0]: Submitting transaction c56c580654dde25db124cbcd02a61ce9c93294abc5f571afad242ea1ef0b130f
+2025-06-18 04:16:47.663 TRACE : trigger interaction 0xc0003ca6c8 65/100
+2025-06-18 04:16:47.663 TRACE client[0]: Processing transaction with hash: f791b57c13787771ace26c0e65d48548defeb19758b9a2ade3451a4872dd36e5
+2025-06-18 04:16:47.663 DEBUG client[0]: Submitting transaction f791b57c13787771ace26c0e65d48548defeb19758b9a2ade3451a4872dd36e5
+2025-06-18 04:16:47.762 TRACE : trigger interaction 0xc000415d48 66/100
+2025-06-18 04:16:47.762 TRACE client[0]: Processing transaction with hash: f1a0ff119c7f18c5a5fdc9f89b21c9b4b1b8692ac4ebf7bdf66dfe1c9d1430f7
+2025-06-18 04:16:47.763 DEBUG client[0]: Submitting transaction f1a0ff119c7f18c5a5fdc9f89b21c9b4b1b8692ac4ebf7bdf66dfe1c9d1430f7
+2025-06-18 04:16:47.862 TRACE : trigger interaction 0xc0007f8d88 67/100
+2025-06-18 04:16:47.862 TRACE client[0]: Processing transaction with hash: f3fec5ffb4fe33902d8cbb6a3c04348babccbe6a9cd8c0d97450f2e27999a997
+2025-06-18 04:16:47.862 DEBUG client[0]: Submitting transaction f3fec5ffb4fe33902d8cbb6a3c04348babccbe6a9cd8c0d97450f2e27999a997
+2025-06-18 04:16:47.962 TRACE : trigger interaction 0xc0007f8908 68/100
+2025-06-18 04:16:47.962 TRACE client[0]: Processing transaction with hash: cf40995be8201951e159999e0106f7034fc9c88c3308417efe27f2bd276a3163
+2025-06-18 04:16:47.962 DEBUG client[0]: Submitting transaction cf40995be8201951e159999e0106f7034fc9c88c3308417efe27f2bd276a3163
+2025-06-18 04:16:48.062 TRACE : trigger interaction 0xc0007f8008 69/100
+2025-06-18 04:16:48.062 TRACE client[0]: Processing transaction with hash: 17cc68cb6f3f33bb99ef660bd59c68699c29d2c1f7553ef00b6690c0fe0106d5
+2025-06-18 04:16:48.062 DEBUG client[0]: Submitting transaction 17cc68cb6f3f33bb99ef660bd59c68699c29d2c1f7553ef00b6690c0fe0106d5
+2025-06-18 04:16:48.162 TRACE : trigger interaction 0xc0007f9b08 70/100
+2025-06-18 04:16:48.162 TRACE client[0]: Processing transaction with hash: 6816fa1d97372f2f08b95a397106d6022c1048fc68974fc3221e2446686e96d6
+2025-06-18 04:16:48.162 DEBUG client[0]: Submitting transaction 6816fa1d97372f2f08b95a397106d6022c1048fc68974fc3221e2446686e96d6
+2025-06-18 04:16:48.262 TRACE : trigger interaction 0xc0007f86c8 71/100
+2025-06-18 04:16:48.262 TRACE client[0]: Processing transaction with hash: 7d92d4cf75ec9444a8587bffa233262bb6e9ba3f565d8ebdc786196b6f240042
+2025-06-18 04:16:48.262 DEBUG client[0]: Submitting transaction 7d92d4cf75ec9444a8587bffa233262bb6e9ba3f565d8ebdc786196b6f240042
+2025-06-18 04:16:48.362 TRACE : trigger interaction 0xc000415448 72/100
+2025-06-18 04:16:48.362 TRACE client[0]: Processing transaction with hash: bcea67121404d38059d5fc4d57cb28d596b43ab5830cafa1d6c744b31920e97c
+2025-06-18 04:16:48.362 DEBUG client[0]: Submitting transaction bcea67121404d38059d5fc4d57cb28d596b43ab5830cafa1d6c744b31920e97c
+2025-06-18 04:16:48.433 TRACE client[0]: Found transaction in block: 6484a748333b72ff163c42ac6d97549a50ee6c1165ced00fcbfa1fc94adf746c
+2025-06-18 04:16:48.433 TRACE client[0]: Found transaction in block: 84d35dda822453c20731c3b0b0413643ac3deaf6b83e08fb69bad158161888ab
+2025-06-18 04:16:48.433 TRACE client[0]: Found transaction in block: 81ff3959750199471c385626519d8bcf07b5b9ff1138cf7a2c5e5b030260657e
+2025-06-18 04:16:48.433 TRACE client[0]: Found transaction in block: 61cf286da04e969a3d822bffb8cf2a85a7dbe27f83cd0771e4fcc02586c1fe61
+2025-06-18 04:16:48.433 TRACE client[0]: Found transaction in block: 040a2ca9a3477d7f38b7a7227381ae5010c70fba6d4853b3d79337b5a8dbe5c1
+2025-06-18 04:16:48.433 TRACE client[0]: Found transaction in block: 6e32a2d557e0594a98c008be947ba1036a6712d1e18de090adae325b17ec646e
+2025-06-18 04:16:48.433 TRACE client[0]: Found transaction in block: 852aa3241d767130c5cbe8fde52eadc449cdcd9f304db229afbafd76205fbfe1
+2025-06-18 04:16:48.433 TRACE client[0]: Found transaction in block: cbded9f28d6fb7b74293e7b76a4b11c8b560f1cff44dc4b39da009add1f31c04
+2025-06-18 04:16:48.433 TRACE client[0]: Found transaction in block: 712ae69f43a93d03f19f7d9212befae4fb1b284d459ab09638901a0989b3bd81
+2025-06-18 04:16:48.433 TRACE client[0]: Found transaction in block: 15f3e412a743e912c2ea103c189f6c2cd6e069d3f9650dccb0f94cb5f9f104f3
+2025-06-18 04:16:48.433 TRACE client[0]: Found transaction in block: edb3446cbb5c5e6a0de59aae970c70f76d69a3b09fc8e79c2c3fdac9014b69bc
+2025-06-18 04:16:48.433 TRACE client[0]: Found transaction in block: f33b58f05379b0b12f951128d218a9446d07151c4d3d0848167b4ec423194564
+2025-06-18 04:16:48.433 TRACE client[0]: Found transaction in block: e0b3e2873ee99db41bf68cfb2890b04809cdc8365cbcd1eee7b033f9195380be
+2025-06-18 04:16:48.433 TRACE client[0]: Found transaction in block: 57aea83dc7889c4b66fa51ee0176bc28e1db0948cf851cb7cff8276fae5684a5
+2025-06-18 04:16:48.433 TRACE client[0]: Found transaction in block: 302861b403fcba34eecd7ea62ddf5be5f8303660bf56a0784d4bebd385b60e34
+2025-06-18 04:16:48.433 TRACE client[0]: Found transaction in block: c99eae628b806e27223734e1b8b9d8c4dab366b4ffa59e4cd8468f92b4a5b820
+2025-06-18 04:16:48.433 TRACE client[0]: Found transaction in block: eb3521299237344ede96058c9f36c3c176fc55fa70b127667340c590641ac1a4
+2025-06-18 04:16:48.433 TRACE client[0]: Found transaction in block: 20a2da45f8efa567fe55fdf997986007ca900a9a8fb4c2a8faddf6525072e015
+2025-06-18 04:16:48.433 TRACE client[0]: Found transaction in block: 238101a88c079c82d83ad395381a34157aa10df45b277aaee5b56a716267bec1
+2025-06-18 04:16:48.433 TRACE client[0]: Found transaction in block: e70bf3ebea16df929fa36933c23e57bccb27921ecea11caa54d9ca8cb52af7e3
+2025-06-18 04:16:48.433 TRACE client[0]: Found transaction in block: cba93871cc4d362fcbe720620cb6bc2c12ec9685f7e01682186bd829c03bfd89
+2025-06-18 04:16:48.433 TRACE client[0]: Found transaction in block: 2266bc04d959bb0dc762c2e879b25aa78bada34084037b767b6c2ca7ff35ac0a
+2025-06-18 04:16:48.433 TRACE client[0]: Found transaction in block: b223a7ed8bb4fc04ab2e85b4a8a4b839a1261100abd3415dfadd4e19c9301a46
+2025-06-18 04:16:48.433 TRACE client[0]: Found transaction in block: 2a352b6c774ab461c42cbc8ca84f415348c4cff7a8539068335e707f22f2055b
+2025-06-18 04:16:48.433 TRACE client[0]: Found transaction in block: 1f7337822a9706fe53adbb7da736d4614a0d03316bbd70fbc3587a2caf1ffb85
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: 85cfcd5d8e5779f7e2642996bdc93447cda6b72b5fef7b68ce200ba0587bb5d0
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: 7f792463c6d7e0404fcd172f2083ca3b56ee3d9862b4cd68f202941c18462a03
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: 5a97d3b2e0de4fa6915da2d393f0d089dfa497313dd34532da9bb40fb39a3bb1
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: bcb3c5b1d730c84f2bacf148e926bea85f97d5c139ef1c69ad1c89c760283af6
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: 4e64f52ce7ec184b97859a7811afc13e9620e652574d107158f3e1125b8ca1c3
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: 66a118726c13aa595895a5b6b7f15616ef0b8c3de370b2dc01ef5877ff9645dd
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: 513806cd9809f131032db2e903a46856a4a191886eee50af134a85354b48e63b
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: 5bf199dba6d76ef89348ad36bccdc0485851636180a08ce5290461e6b9c905e6
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: 72c409978c45718dbe442fb7f0630550e5e20acb0fa81faaab8ea2cff7ff77dd
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: 9cd34bec3029a2ac526977dc0a28c74c97cae997c1147556f0638bae7fa19316
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: c912344ab0c7c490ef1fa34c60aee0f7b62c50cf15bad564b88abbb69c51fc49
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: cbea3d54848cd04097473df59c9a8a402bc568fe4e29304fc420e50bf1ce0841
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: 1fb5e07fee03b19dc2ce0a6b4818ce071577f20931aea6ebd9bf73b482657d94
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: ae370b27308f6fbfc095c1d4f203815f14c4e94b2ccc614540c2f14d565eda52
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: be1cdb8adddd805e99fdffa478f591cb987b1f7a56f697584264c5cdee6c574c
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: d5b172d00d9704db6ea43f264bc17d9d1beaac0e9757d87e89ea885dfb0ec72f
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: 691e08e843ce742aa43a3078af0749421e4a63dc0951d6cfd3df0b98c35a3d84
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: 2be6ed9e33fb3fba6a399e163670dac8d0d50dfe3c9f97f30099ecf9ea1514b0
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: 8a12a113a8d16abdad2191e923631d24e3a1425594c64cbf6b1f657608e3d5b1
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: 040fb2bdde98cb5ea1cd0782e800a189bea7142b875cce5eac703358370e2726
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: 481f83c92d3456272f430d89512d1ea0b575d93fcf3b32392a6bb2020c0bee2e
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: 57f0b283ad462e748e41c99ff593c1a780f406b9a6f556eb4278cd8cb337f451
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: a7c5829596229b9234058ba816822c065461b8db7a3c5338e7caed7f784f2217
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: d7d2151e7ae885ef5a63bfa2c45fb274c68f1a142e27758375a4385227d97653
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: 327c523a03af6f539cecac7647e3223b393ae8527eb93344942a1f932f1925f3
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: 90a0a42b2c9faebd1241453c70f95e4d836339b58b171d08acaea99c2af8ab7a
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: c221b09e08a6ebece4f7b10b2f38097b93114fec709723c16d2395596c916e73
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: dbeb5a95269ca2141465be65f3a5b402b845829f6712f9ba31728792731cd367
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: c56c580654dde25db124cbcd02a61ce9c93294abc5f571afad242ea1ef0b130f
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: f791b57c13787771ace26c0e65d48548defeb19758b9a2ade3451a4872dd36e5
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: f1a0ff119c7f18c5a5fdc9f89b21c9b4b1b8692ac4ebf7bdf66dfe1c9d1430f7
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: f3fec5ffb4fe33902d8cbb6a3c04348babccbe6a9cd8c0d97450f2e27999a997
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: cf40995be8201951e159999e0106f7034fc9c88c3308417efe27f2bd276a3163
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: 17cc68cb6f3f33bb99ef660bd59c68699c29d2c1f7553ef00b6690c0fe0106d5
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: 6816fa1d97372f2f08b95a397106d6022c1048fc68974fc3221e2446686e96d6
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: 7d92d4cf75ec9444a8587bffa233262bb6e9ba3f565d8ebdc786196b6f240042
+2025-06-18 04:16:48.434 TRACE client[0]: Found transaction in block: bcea67121404d38059d5fc4d57cb28d596b43ab5830cafa1d6c744b31920e97c
+2025-06-18 04:16:48.462 TRACE : trigger interaction 0xc000470248 73/100
+2025-06-18 04:16:48.462 TRACE client[0]: Processing transaction with hash: 6872e83bd8afc6e5f27e992f5ee0d23f611d4f6d99324e00199941b1081f3579
+2025-06-18 04:16:48.462 DEBUG client[0]: Submitting transaction 6872e83bd8afc6e5f27e992f5ee0d23f611d4f6d99324e00199941b1081f3579
+2025-06-18 04:16:48.562 TRACE : trigger interaction 0xc000471d48 74/100
+2025-06-18 04:16:48.562 TRACE client[0]: Processing transaction with hash: bc3a7cc4afbd5e07a1fe8d2ffbf004e6b6b487d6db2374371613591c7452dfc1
+2025-06-18 04:16:48.562 DEBUG client[0]: Submitting transaction bc3a7cc4afbd5e07a1fe8d2ffbf004e6b6b487d6db2374371613591c7452dfc1
+2025-06-18 04:16:48.662 TRACE : trigger interaction 0xc000415688 75/100
+2025-06-18 04:16:48.662 TRACE client[0]: Processing transaction with hash: 0f32f1a226f9457957014eb84a74ef3667380ad074b779c4244c70215faafeea
+2025-06-18 04:16:48.662 DEBUG client[0]: Submitting transaction 0f32f1a226f9457957014eb84a74ef3667380ad074b779c4244c70215faafeea
+2025-06-18 04:16:48.762 TRACE : trigger interaction 0xc00036f448 76/100
+2025-06-18 04:16:48.762 TRACE client[0]: Processing transaction with hash: faa834a6a00d1f733c63f84e177fa91262aa6d3fe6263c7978c20cc503cbb572
+2025-06-18 04:16:48.762 DEBUG client[0]: Submitting transaction faa834a6a00d1f733c63f84e177fa91262aa6d3fe6263c7978c20cc503cbb572
+2025-06-18 04:16:48.862 TRACE : trigger interaction 0xc0006946c8 77/100
+2025-06-18 04:16:48.862 TRACE client[0]: Processing transaction with hash: d3e515c84c887bcae170976e7c80117d59aa417c1b514be415622b390f190d61
+2025-06-18 04:16:48.862 DEBUG client[0]: Submitting transaction d3e515c84c887bcae170976e7c80117d59aa417c1b514be415622b390f190d61
+2025-06-18 04:16:48.963 TRACE : trigger interaction 0xc000470488 78/100
+2025-06-18 04:16:48.963 TRACE client[0]: Processing transaction with hash: 72145d0b212223e893a8d4fa23c3f5783cbb638ecc21ca987257088bb77e58aa
+2025-06-18 04:16:48.963 DEBUG client[0]: Submitting transaction 72145d0b212223e893a8d4fa23c3f5783cbb638ecc21ca987257088bb77e58aa
+2025-06-18 04:16:49.062 TRACE : trigger interaction 0xc000470008 79/100
+2025-06-18 04:16:49.063 TRACE client[0]: Processing transaction with hash: e6ff0bb36a87637f72e1f40a44208b35166777e82515b3936c25084ff9bd804c
+2025-06-18 04:16:49.063 DEBUG client[0]: Submitting transaction e6ff0bb36a87637f72e1f40a44208b35166777e82515b3936c25084ff9bd804c
+2025-06-18 04:16:49.163 TRACE : trigger interaction 0xc0001a6248 80/100
+2025-06-18 04:16:49.163 TRACE client[0]: Processing transaction with hash: b581b4c47254aeb55fb2ab7c14b2aeb321c038add6c82abafed45678e409c223
+2025-06-18 04:16:49.163 DEBUG client[0]: Submitting transaction b581b4c47254aeb55fb2ab7c14b2aeb321c038add6c82abafed45678e409c223
+2025-06-18 04:16:49.263 TRACE : trigger interaction 0xc0007f9208 81/100
+2025-06-18 04:16:49.263 TRACE client[0]: Processing transaction with hash: 95790539c35878f6fadea60fa7052924eaac74d2a5ea778a28b7705e3f7b4754
+2025-06-18 04:16:49.263 DEBUG client[0]: Submitting transaction 95790539c35878f6fadea60fa7052924eaac74d2a5ea778a28b7705e3f7b4754
+2025-06-18 04:16:49.363 TRACE : trigger interaction 0xc0003cbb08 82/100
+2025-06-18 04:16:49.363 TRACE client[0]: Processing transaction with hash: a3fc2ff2f8fac61abb6f3962a16839263fa9182f69e79edad1b00754e3b9be8a
+2025-06-18 04:16:49.363 DEBUG client[0]: Submitting transaction a3fc2ff2f8fac61abb6f3962a16839263fa9182f69e79edad1b00754e3b9be8a
+2025-06-18 04:16:49.462 TRACE : trigger interaction 0xc0003c3448 83/100
+2025-06-18 04:16:49.462 TRACE client[0]: Processing transaction with hash: 44f1ec0b9bee00785ef76b784163ec4eca774e5563b76fc76f83122475719ec6
+2025-06-18 04:16:49.462 DEBUG client[0]: Submitting transaction 44f1ec0b9bee00785ef76b784163ec4eca774e5563b76fc76f83122475719ec6
+2025-06-18 04:16:49.562 TRACE : trigger interaction 0xc000470fc8 84/100
+2025-06-18 04:16:49.562 TRACE client[0]: Processing transaction with hash: f2b817a7bcae098c643036ad30b3dbd94a299265d5fef38703e783d276426fdd
+2025-06-18 04:16:49.562 DEBUG client[0]: Submitting transaction f2b817a7bcae098c643036ad30b3dbd94a299265d5fef38703e783d276426fdd
+2025-06-18 04:16:49.662 TRACE : trigger interaction 0xc00036f208 85/100
+2025-06-18 04:16:49.662 TRACE client[0]: Processing transaction with hash: 14fc58b367703ee21ccbf186fd3b95d8442a13941dd9a18920bcd0d1338af3ef
+2025-06-18 04:16:49.662 DEBUG client[0]: Submitting transaction 14fc58b367703ee21ccbf186fd3b95d8442a13941dd9a18920bcd0d1338af3ef
+2025-06-18 04:16:49.762 TRACE : trigger interaction 0xc000414248 86/100
+2025-06-18 04:16:49.762 TRACE client[0]: Processing transaction with hash: bc213da17965f42de87e3a7f24b10dea2de41eca6c0fd38edcd298042ebdcabe
+2025-06-18 04:16:49.762 DEBUG client[0]: Submitting transaction bc213da17965f42de87e3a7f24b10dea2de41eca6c0fd38edcd298042ebdcabe
+2025-06-18 04:16:49.862 TRACE : trigger interaction 0xc00061a248 87/100
+2025-06-18 04:16:49.862 TRACE client[0]: Processing transaction with hash: bee36d6a8243bcf6b601486c9c8c69f8b4adaf815d02f748a8514e7631c1e181
+2025-06-18 04:16:49.862 DEBUG client[0]: Submitting transaction bee36d6a8243bcf6b601486c9c8c69f8b4adaf815d02f748a8514e7631c1e181
+2025-06-18 04:16:49.963 TRACE : trigger interaction 0xc0007f9448 88/100
+2025-06-18 04:16:49.963 TRACE client[0]: Processing transaction with hash: 8044ad9b57fb32fb96b6acf878b0faf3aa69a9c46b56e5f931319cc41948aabd
+2025-06-18 04:16:49.963 DEBUG client[0]: Submitting transaction 8044ad9b57fb32fb96b6acf878b0faf3aa69a9c46b56e5f931319cc41948aabd
+2025-06-18 04:16:50.063 TRACE : trigger interaction 0xc00055a248 89/100
+2025-06-18 04:16:50.063 TRACE client[0]: Processing transaction with hash: aab810c384d14690931a01234919c717c7ccdc555d73f617fdbfd6b0e685852a
+2025-06-18 04:16:50.063 DEBUG client[0]: Submitting transaction aab810c384d14690931a01234919c717c7ccdc555d73f617fdbfd6b0e685852a
+2025-06-18 04:16:50.162 TRACE : trigger interaction 0xc0001a6008 90/100
+2025-06-18 04:16:50.162 TRACE client[0]: Processing transaction with hash: 738e31b1d12d764d3f8e2ecfded6862fa00f5945a4fb43e347179f526ae21d07
+2025-06-18 04:16:50.162 DEBUG client[0]: Submitting transaction 738e31b1d12d764d3f8e2ecfded6862fa00f5945a4fb43e347179f526ae21d07
+2025-06-18 04:16:50.262 TRACE : trigger interaction 0xc0004158c8 91/100
+2025-06-18 04:16:50.262 TRACE client[0]: Processing transaction with hash: 46b646b1179cf46bbbe96ac10fa70099293dd9906d1e91b85b8e4f6cc42c7333
+2025-06-18 04:16:50.262 DEBUG client[0]: Submitting transaction 46b646b1179cf46bbbe96ac10fa70099293dd9906d1e91b85b8e4f6cc42c7333
+2025-06-18 04:16:50.362 TRACE : trigger interaction 0xc0004f5b08 92/100
+2025-06-18 04:16:50.362 TRACE client[0]: Processing transaction with hash: f47d59d06b9aee6f17efafaaf312cfe0a1c51a0365fa238777805efd345bbfb3
+2025-06-18 04:16:50.362 DEBUG client[0]: Submitting transaction f47d59d06b9aee6f17efafaaf312cfe0a1c51a0365fa238777805efd345bbfb3
+2025-06-18 04:16:50.462 TRACE : trigger interaction 0xc000560908 93/100
+2025-06-18 04:16:50.462 TRACE client[0]: Processing transaction with hash: 4ae8d5da59234adbe3df5e7beb5c61d088150fb50ed5f3c86e9c5a2bab72214d
+2025-06-18 04:16:50.462 DEBUG client[0]: Submitting transaction 4ae8d5da59234adbe3df5e7beb5c61d088150fb50ed5f3c86e9c5a2bab72214d
+2025-06-18 04:16:50.562 TRACE : trigger interaction 0xc00036ed88 94/100
+2025-06-18 04:16:50.562 TRACE client[0]: Processing transaction with hash: 58cbb0d352c441bf5f57deee3d73fe58ff4f45681341f04586e852d8de157b24
+2025-06-18 04:16:50.562 DEBUG client[0]: Submitting transaction 58cbb0d352c441bf5f57deee3d73fe58ff4f45681341f04586e852d8de157b24
+2025-06-18 04:16:50.662 TRACE : trigger interaction 0xc0003c2248 95/100
+2025-06-18 04:16:50.662 TRACE client[0]: Processing transaction with hash: 7af2971d3a2c6c8346a80bf695b80416fb52eba6afda81678176d0ce6941c78b
+2025-06-18 04:16:50.662 DEBUG client[0]: Submitting transaction 7af2971d3a2c6c8346a80bf695b80416fb52eba6afda81678176d0ce6941c78b
+2025-06-18 04:16:50.763 TRACE : trigger interaction 0xc000496fc8 96/100
+2025-06-18 04:16:50.763 TRACE client[0]: Processing transaction with hash: 198d25efa1d63fcf3639fb666ddf5795bb9151115aaa4a806ae32555362db737
+2025-06-18 04:16:50.763 DEBUG client[0]: Submitting transaction 198d25efa1d63fcf3639fb666ddf5795bb9151115aaa4a806ae32555362db737
+2025-06-18 04:16:50.817 TRACE client[0]: Found transaction in block: 6872e83bd8afc6e5f27e992f5ee0d23f611d4f6d99324e00199941b1081f3579
+2025-06-18 04:16:50.817 TRACE client[0]: Found transaction in block: bc3a7cc4afbd5e07a1fe8d2ffbf004e6b6b487d6db2374371613591c7452dfc1
+2025-06-18 04:16:50.817 TRACE client[0]: Found transaction in block: 0f32f1a226f9457957014eb84a74ef3667380ad074b779c4244c70215faafeea
+2025-06-18 04:16:50.817 TRACE client[0]: Found transaction in block: faa834a6a00d1f733c63f84e177fa91262aa6d3fe6263c7978c20cc503cbb572
+2025-06-18 04:16:50.817 TRACE client[0]: Found transaction in block: d3e515c84c887bcae170976e7c80117d59aa417c1b514be415622b390f190d61
+2025-06-18 04:16:50.817 TRACE client[0]: Found transaction in block: 72145d0b212223e893a8d4fa23c3f5783cbb638ecc21ca987257088bb77e58aa
+2025-06-18 04:16:50.817 TRACE client[0]: Found transaction in block: e6ff0bb36a87637f72e1f40a44208b35166777e82515b3936c25084ff9bd804c
+2025-06-18 04:16:50.817 TRACE client[0]: Found transaction in block: b581b4c47254aeb55fb2ab7c14b2aeb321c038add6c82abafed45678e409c223
+2025-06-18 04:16:50.817 TRACE client[0]: Found transaction in block: 95790539c35878f6fadea60fa7052924eaac74d2a5ea778a28b7705e3f7b4754
+2025-06-18 04:16:50.817 TRACE client[0]: Found transaction in block: a3fc2ff2f8fac61abb6f3962a16839263fa9182f69e79edad1b00754e3b9be8a
+2025-06-18 04:16:50.817 TRACE client[0]: Found transaction in block: 44f1ec0b9bee00785ef76b784163ec4eca774e5563b76fc76f83122475719ec6
+2025-06-18 04:16:50.817 TRACE client[0]: Found transaction in block: f2b817a7bcae098c643036ad30b3dbd94a299265d5fef38703e783d276426fdd
+2025-06-18 04:16:50.817 TRACE client[0]: Found transaction in block: 14fc58b367703ee21ccbf186fd3b95d8442a13941dd9a18920bcd0d1338af3ef
+2025-06-18 04:16:50.817 TRACE client[0]: Found transaction in block: bc213da17965f42de87e3a7f24b10dea2de41eca6c0fd38edcd298042ebdcabe
+2025-06-18 04:16:50.817 TRACE client[0]: Found transaction in block: bee36d6a8243bcf6b601486c9c8c69f8b4adaf815d02f748a8514e7631c1e181
+2025-06-18 04:16:50.817 TRACE client[0]: Found transaction in block: 8044ad9b57fb32fb96b6acf878b0faf3aa69a9c46b56e5f931319cc41948aabd
+2025-06-18 04:16:50.817 TRACE client[0]: Found transaction in block: aab810c384d14690931a01234919c717c7ccdc555d73f617fdbfd6b0e685852a
+2025-06-18 04:16:50.817 TRACE client[0]: Found transaction in block: 738e31b1d12d764d3f8e2ecfded6862fa00f5945a4fb43e347179f526ae21d07
+2025-06-18 04:16:50.817 TRACE client[0]: Found transaction in block: 46b646b1179cf46bbbe96ac10fa70099293dd9906d1e91b85b8e4f6cc42c7333
+2025-06-18 04:16:50.817 TRACE client[0]: Found transaction in block: f47d59d06b9aee6f17efafaaf312cfe0a1c51a0365fa238777805efd345bbfb3
+2025-06-18 04:16:50.817 TRACE client[0]: Found transaction in block: 4ae8d5da59234adbe3df5e7beb5c61d088150fb50ed5f3c86e9c5a2bab72214d
+2025-06-18 04:16:50.817 TRACE client[0]: Found transaction in block: 58cbb0d352c441bf5f57deee3d73fe58ff4f45681341f04586e852d8de157b24
+2025-06-18 04:16:50.817 TRACE client[0]: Found transaction in block: 7af2971d3a2c6c8346a80bf695b80416fb52eba6afda81678176d0ce6941c78b
+2025-06-18 04:16:50.817 TRACE client[0]: Found transaction in block: 198d25efa1d63fcf3639fb666ddf5795bb9151115aaa4a806ae32555362db737
+2025-06-18 04:16:50.862 TRACE : trigger interaction 0xc000772908 97/100
+2025-06-18 04:16:50.862 TRACE client[0]: Processing transaction with hash: 2fc72d1d74cae6e25968b309b30da323ca07c14b691ba8a2e6cc977528a14a9b
+2025-06-18 04:16:50.862 DEBUG client[0]: Submitting transaction 2fc72d1d74cae6e25968b309b30da323ca07c14b691ba8a2e6cc977528a14a9b
+2025-06-18 04:16:50.962 TRACE : trigger interaction 0xc0004718c8 98/100
+2025-06-18 04:16:50.962 TRACE client[0]: Processing transaction with hash: 4eab62c5076927083cd260be1362c9107578a054a7228751998c6179ad977856
+2025-06-18 04:16:50.962 DEBUG client[0]: Submitting transaction 4eab62c5076927083cd260be1362c9107578a054a7228751998c6179ad977856
+2025-06-18 04:16:51.062 TRACE : trigger interaction 0xc0003cafc8 99/100
+2025-06-18 04:16:51.062 TRACE client[0]: Processing transaction with hash: 54667c58a6ff1c2312e3223d4d24443cfac854089a26bc4ea89a96acfcfbc27d
+2025-06-18 04:16:51.062 DEBUG client[0]: Submitting transaction 54667c58a6ff1c2312e3223d4d24443cfac854089a26bc4ea89a96acfcfbc27d
+2025-06-18 04:16:51.162 TRACE : trigger interaction 0xc0004978c8 100/100
+2025-06-18 04:16:51.162 INFO  : sleep for 30s seconds
+2025-06-18 04:16:51.162 TRACE client[0]: Processing transaction with hash: a2f27936157bb014bfeaa72d0a18f6b2ae506bf64ecdb72b9dfb9e75e4c603e3
+2025-06-18 04:16:51.162 DEBUG client[0]: Submitting transaction a2f27936157bb014bfeaa72d0a18f6b2ae506bf64ecdb72b9dfb9e75e4c603e3
+2025-06-18 04:16:51.204 TRACE client[0]: Found transaction in block: 2fc72d1d74cae6e25968b309b30da323ca07c14b691ba8a2e6cc977528a14a9b
+2025-06-18 04:16:51.204 TRACE client[0]: Found transaction in block: 4eab62c5076927083cd260be1362c9107578a054a7228751998c6179ad977856
+2025-06-18 04:16:51.204 TRACE client[0]: Found transaction in block: 54667c58a6ff1c2312e3223d4d24443cfac854089a26bc4ea89a96acfcfbc27d
+2025-06-18 04:16:51.204 TRACE client[0]: Found transaction in block: a2f27936157bb014bfeaa72d0a18f6b2ae506bf64ecdb72b9dfb9e75e4c603e3
+2025-06-18 04:17:21.163 INFO  : stop benchmark
+2025-06-18 04:17:21.163 DEBUG : send 100 results to primary
+2025-06-18 04:17:21.163 TRACE : push result 1/100
+2025-06-18 04:17:21.163 TRACE : push result 2/100
+2025-06-18 04:17:21.163 TRACE : push result 3/100
+2025-06-18 04:17:21.163 TRACE : push result 4/100
+2025-06-18 04:17:21.163 TRACE : push result 5/100
+2025-06-18 04:17:21.163 TRACE : push result 6/100
+2025-06-18 04:17:21.163 TRACE : push result 7/100
+2025-06-18 04:17:21.163 TRACE : push result 8/100
+2025-06-18 04:17:21.163 TRACE : push result 9/100
+2025-06-18 04:17:21.163 TRACE : push result 10/100
+2025-06-18 04:17:21.163 TRACE : push result 11/100
+2025-06-18 04:17:21.163 TRACE : push result 12/100
+2025-06-18 04:17:21.163 TRACE : push result 13/100
+2025-06-18 04:17:21.163 TRACE : push result 14/100
+2025-06-18 04:17:21.163 TRACE : push result 15/100
+2025-06-18 04:17:21.163 TRACE : push result 16/100
+2025-06-18 04:17:21.163 TRACE : push result 17/100
+2025-06-18 04:17:21.163 TRACE : push result 18/100
+2025-06-18 04:17:21.163 TRACE : push result 19/100
+2025-06-18 04:17:21.163 TRACE : push result 20/100
+2025-06-18 04:17:21.163 TRACE : push result 21/100
+2025-06-18 04:17:21.163 TRACE : push result 22/100
+2025-06-18 04:17:21.163 TRACE : push result 23/100
+2025-06-18 04:17:21.163 TRACE : push result 24/100
+2025-06-18 04:17:21.163 TRACE : push result 25/100
+2025-06-18 04:17:21.163 TRACE : push result 26/100
+2025-06-18 04:17:21.163 TRACE : push result 27/100
+2025-06-18 04:17:21.163 TRACE : push result 28/100
+2025-06-18 04:17:21.163 TRACE : push result 29/100
+2025-06-18 04:17:21.163 TRACE : push result 30/100
+2025-06-18 04:17:21.163 TRACE : push result 31/100
+2025-06-18 04:17:21.163 TRACE : push result 32/100
+2025-06-18 04:17:21.163 TRACE : push result 33/100
+2025-06-18 04:17:21.163 TRACE : push result 34/100
+2025-06-18 04:17:21.163 TRACE : push result 35/100
+2025-06-18 04:17:21.163 TRACE : push result 36/100
+2025-06-18 04:17:21.163 TRACE : push result 37/100
+2025-06-18 04:17:21.163 TRACE : push result 38/100
+2025-06-18 04:17:21.163 TRACE : push result 39/100
+2025-06-18 04:17:21.163 TRACE : push result 40/100
+2025-06-18 04:17:21.163 TRACE : push result 41/100
+2025-06-18 04:17:21.163 TRACE : push result 42/100
+2025-06-18 04:17:21.163 TRACE : push result 43/100
+2025-06-18 04:17:21.163 TRACE : push result 44/100
+2025-06-18 04:17:21.163 TRACE : push result 45/100
+2025-06-18 04:17:21.163 TRACE : push result 46/100
+2025-06-18 04:17:21.163 TRACE : push result 47/100
+2025-06-18 04:17:21.163 TRACE : push result 48/100
+2025-06-18 04:17:21.163 TRACE : push result 49/100
+2025-06-18 04:17:21.163 TRACE : push result 50/100
+2025-06-18 04:17:21.163 TRACE : push result 51/100
+2025-06-18 04:17:21.163 TRACE : push result 52/100
+2025-06-18 04:17:21.163 TRACE : push result 53/100
+2025-06-18 04:17:21.163 TRACE : push result 54/100
+2025-06-18 04:17:21.163 TRACE : push result 55/100
+2025-06-18 04:17:21.163 TRACE : push result 56/100
+2025-06-18 04:17:21.163 TRACE : push result 57/100
+2025-06-18 04:17:21.163 TRACE : push result 58/100
+2025-06-18 04:17:21.163 TRACE : push result 59/100
+2025-06-18 04:17:21.163 TRACE : push result 60/100
+2025-06-18 04:17:21.163 TRACE : push result 61/100
+2025-06-18 04:17:21.163 TRACE : push result 62/100
+2025-06-18 04:17:21.163 TRACE : push result 63/100
+2025-06-18 04:17:21.163 TRACE : push result 64/100
+2025-06-18 04:17:21.163 TRACE : push result 65/100
+2025-06-18 04:17:21.163 TRACE : push result 66/100
+2025-06-18 04:17:21.163 TRACE : push result 67/100
+2025-06-18 04:17:21.163 TRACE : push result 68/100
+2025-06-18 04:17:21.163 TRACE : push result 69/100
+2025-06-18 04:17:21.163 TRACE : push result 70/100
+2025-06-18 04:17:21.163 TRACE : push result 71/100
+2025-06-18 04:17:21.163 TRACE : push result 72/100
+2025-06-18 04:17:21.163 TRACE : push result 73/100
+2025-06-18 04:17:21.163 TRACE : push result 74/100
+2025-06-18 04:17:21.163 TRACE : push result 75/100
+2025-06-18 04:17:21.163 TRACE : push result 76/100
+2025-06-18 04:17:21.163 TRACE : push result 77/100
+2025-06-18 04:17:21.163 TRACE : push result 78/100
+2025-06-18 04:17:21.163 TRACE : push result 79/100
+2025-06-18 04:17:21.163 TRACE : push result 80/100
+2025-06-18 04:17:21.163 TRACE : push result 81/100
+2025-06-18 04:17:21.163 TRACE : push result 82/100
+2025-06-18 04:17:21.163 TRACE : push result 83/100
+2025-06-18 04:17:21.163 TRACE : push result 84/100
+2025-06-18 04:17:21.163 TRACE : push result 85/100
+2025-06-18 04:17:21.163 TRACE : push result 86/100
+2025-06-18 04:17:21.163 TRACE : push result 87/100
+2025-06-18 04:17:21.163 TRACE : push result 88/100
+2025-06-18 04:17:21.163 TRACE : push result 89/100
+2025-06-18 04:17:21.163 TRACE : push result 90/100
+2025-06-18 04:17:21.163 TRACE : push result 91/100
+2025-06-18 04:17:21.163 TRACE : push result 92/100
+2025-06-18 04:17:21.163 TRACE : push result 93/100
+2025-06-18 04:17:21.163 TRACE : push result 94/100
+2025-06-18 04:17:21.163 TRACE : push result 95/100
+2025-06-18 04:17:21.163 TRACE : push result 96/100
+2025-06-18 04:17:21.163 TRACE : push result 97/100
+2025-06-18 04:17:21.163 TRACE : push result 98/100
+2025-06-18 04:17:21.163 TRACE : push result 99/100
+2025-06-18 04:17:21.163 TRACE : push result 100/100
+2025-06-18 04:17:21.163 DEBUG : close connection to primary

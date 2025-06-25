@@ -1,6 +1,5 @@
 package mock
 
-
 import (
 	"bytes"
 	"diablo-benchmark/core"
@@ -10,7 +9,6 @@ import (
 	"strconv"
 	"time"
 )
-
 
 type BlockchainInterface struct {
 }
@@ -38,7 +36,7 @@ func (this *BlockchainInterface) Builder(params map[string]string, env []string,
 		}
 	}
 
-	return &BlockchainBuilder{ logger, 0, 0 }, nil
+	return &BlockchainBuilder{logger, 0, 0}, nil
 }
 
 func (this *BlockchainInterface) Client(params map[string]string, env, view []string, logger core.Logger) (core.BlockchainClient, error) {
@@ -87,19 +85,18 @@ func (this *BlockchainInterface) Client(params map[string]string, env, view []st
 	} else {
 		presign, err = strconv.ParseBool(value)
 		if err != nil {
-			return nil, fmt.Errorf("invalid pre-sign parameter: " +
+			return nil, fmt.Errorf("invalid pre-sign parameter: "+
 				"'%s'", value)
 		}
 	}
 
-	return &BlockchainClient{ delay, presign, logger }, nil
+	return &BlockchainClient{delay, presign, logger}, nil
 }
 
-
 type BlockchainBuilder struct {
-	logger        core.Logger
-	nextAccount   int
-	nextContract  int
+	logger       core.Logger
+	nextAccount  int
+	nextContract int
 }
 
 func (this *BlockchainBuilder) CreateAccount(stake int) (interface{}, error) {
@@ -154,11 +151,10 @@ func (this *BlockchainBuilder) EncodeInteraction(itype string, expr core.Benchma
 	return nil, fmt.Errorf("unknown interaction type '%s'", itype)
 }
 
-
 type BlockchainClient struct {
-	delay    float64
-	presign  bool
-	logger   core.Logger
+	delay   float64
+	presign bool
+	logger  core.Logger
 }
 
 func (this *BlockchainClient) DecodePayload(encoded []byte) (interface{}, error) {
