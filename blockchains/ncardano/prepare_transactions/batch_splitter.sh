@@ -1,252 +1,211 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# batch_splitter.sh
+# Split a genesis UTxO across levels. Pays back to genesis at all levels except the last,
+# which pays to pool1 owner. Signs with genesis throughout. Chunks outputs to avoid oversize txs.
 
-# Cardano Multi-Stage UTxO Splitter Script
-# This script splits a genesis UTxO in two stages:
-# Stage 1: Split genesis UTxO into N transactions
-# Stage 2: Split each resulting UTxO into M outputs each
+set -euo pipefail
 
-set -e
+# ---------- config ----------
+: "${MAGIC:=42}"
+: "${CAP:=300}"                 # planning cap (max outputs/tx)
+: "${LEAF:=2000000}"            # lovelace per final leaf UTxO (≥ minUTxO)
+: "${FEE_MARGIN:=2000000}"      # fee buffer per parent tx
+: "${CHANGE_MIN:=1200000}"      # min change to avoid dust
+: "${THREADS:=$(nproc)}"        # parallelism per level
+: "${STATE_DIR:=$HOME/cardano/cardano-node-tests/dev_workdir/state-cluster0}"
+: "${MAX_OUTS_PER_TX:=$CAP}"    # per-tx outputs (keep ≤ CAP; reduce if size errors)
 
-# Configuration
-STAGE1_SPLITS=${1:-3}  # Default to 3 initial splits
-STAGE2_SPLITS=${2:-5}  # Default to 5 splits per UTxO in stage 2
-TESTNET_MAGIC=42
-SOCKET_PATH="/home/ubuntu/cardano/cardano-node-tests/dev_workdir/state-cluster0/bft1.socket"
-GENESIS_ADDR_FILE="/home/ubuntu/cardano/cardano-node-tests/dev_workdir/state-cluster0/shelley/genesis-utxo.addr"
-GENESIS_SKEY_FILE="/home/ubuntu/cardano/cardano-node-tests/dev_workdir/state-cluster0/shelley/genesis-utxo.skey"
-PPARAMS_FILE="pparams.json"
+# Addresses and keys
+GENESIS_ADDR_FILE="$STATE_DIR/shelley/genesis-utxo.addr"
+GENESIS_SKEY="$STATE_DIR/shelley/genesis-utxo.skey"
+OWNER_ADDR_FILE="$STATE_DIR/nodes/node-pool1/owner.addr"
+OWNER_SKEY="$STATE_DIR/nodes/node-pool1/owner-utxo.skey"   # not used for signing here
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# Socket (set if not already exported)
+: "${CARDANO_NODE_SOCKET_PATH:=$STATE_DIR/bft1.socket}"
 
-echo -e "${GREEN}=== Cardano Multi-Stage UTxO Splitter ===${NC}"
-echo -e "${BLUE}Stage 1: Splitting genesis UTxO into $STAGE1_SPLITS parts${NC}"
-echo -e "${BLUE}Stage 2: Splitting each UTxO into $STAGE2_SPLITS parts${NC}"
-echo -e "${BLUE}Total final UTxOs: $((STAGE1_SPLITS * STAGE2_SPLITS))${NC}"
+# ---------- args ----------
+usage(){ echo "usage: $0 <desired_leaves> [cap=${CAP}]"; }
+[[ $# -ge 1 ]] || { usage >&2; exit 2; }
+TARGET="$1"
+CAP="${2:-$CAP}"
 
-# Ensure socket path is set
-export CARDANO_NODE_SOCKET_PATH="$SOCKET_PATH"
-echo -e "${YELLOW}Socket path set to: $CARDANO_NODE_SOCKET_PATH${NC}"
+# ---------- prerequisites ----------
+for f in "$GENESIS_ADDR_FILE" "$GENESIS_SKEY" "$OWNER_ADDR_FILE"; do
+  [[ -f "$f" ]] || { echo "missing: $f" >&2; exit 1; }
+done
+[[ -S "$CARDANO_NODE_SOCKET_PATH" ]] || { echo "missing socket: $CARDANO_NODE_SOCKET_PATH" >&2; exit 1; }
 
-# Function to check if file exists
-check_file() {
-    if [[ ! -f "$1" ]]; then
-        echo -e "${RED}Error: File $1 not found${NC}"
-        exit 1
-    fi
-}
+GENESIS_ADDR="$(<"$GENESIS_ADDR_FILE")"
+OWNER_ADDR="$(<"$OWNER_ADDR_FILE")"
 
-# Function to check if cardano-cli is available
-check_cardano_cli() {
-    if ! command -v cardano-cli &> /dev/null; then
-        echo -e "${RED}Error: cardano-cli not found in PATH${NC}"
-        exit 1
-    fi
-}
+command -v cardano-cli >/dev/null || { echo "cardano-cli not on PATH" >&2; exit 1; }
+command -v jq >/dev/null || { echo "jq not on PATH" >&2; exit 1; }
 
-# Function to wait for transaction confirmation
-wait_for_confirmation() {
-    echo -e "${YELLOW}Waiting for transaction confirmation...${NC}"
-    sleep 5  # Wait 5 seconds for the transaction to be included in a block
-}
+# ---------- plan library ----------
+[[ -f ./tx_split_plan.sh ]] || { echo "missing ./tx_split_plan.sh" >&2; exit 1; }
+# shellcheck source=/dev/null
+source ./tx_split_plan.sh
 
-# Function to split a specific UTxO
-split_utxo() {
-    local utxo_hash=$1
-    local utxo_index=$2
-    local utxo_amount=$3
-    local num_splits=$4
-    local tx_prefix=$5
-    
-    echo -e "${YELLOW}Splitting UTxO ${utxo_hash}#${utxo_index} into $num_splits parts...${NC}"
-    
-    # Calculate amount per split
-    local amount_per_split=$((utxo_amount / num_splits))
-    
-    # Build transaction outputs
-    local tx_outs=""
-    for ((i=1; i<=num_splits; i++)); do
-        tx_outs="$tx_outs --tx-out $GENESIS_ADDR+$amount_per_split"
-    done
-    
-    # Build draft transaction
-    cardano-cli conway transaction build-raw \
-        --tx-in "${utxo_hash}#${utxo_index}" \
-        $tx_outs \
-        --fee 0 \
-        --protocol-params-file "$PPARAMS_FILE" \
-        --out-file "${tx_prefix}.draft"
-    
-    # Calculate minimum fee
-    local fee_output=$(cardano-cli conway transaction calculate-min-fee \
-        --tx-body-file "${tx_prefix}.draft" \
-        --protocol-params-file "$PPARAMS_FILE" \
-        --witness-count 1)
-    
-    local transaction_fee=$(echo "$fee_output" | awk '{print $1}')
-    echo -e "${GREEN}Calculated fee: $transaction_fee lovelace${NC}"
-    
-    # Recalculate amounts accounting for fees
-    local available_for_outputs=$((utxo_amount - transaction_fee))
-    local base_amount_per_split=$((available_for_outputs / num_splits))
-    local remainder=$((available_for_outputs % num_splits))
-    
-    # Build TX_OUTS with exact amounts
-    tx_outs=""
-    for ((i=1; i<=num_splits; i++)); do
-        if [[ $i -le $remainder ]]; then
-            local split_amount=$((base_amount_per_split + 1))
-        else
-            local split_amount=$base_amount_per_split
-        fi
-        tx_outs="$tx_outs --tx-out $GENESIS_ADDR+$split_amount"
-    done
-    
-    # Build final transaction
-    cardano-cli conway transaction build-raw \
-        --tx-in "${utxo_hash}#${utxo_index}" \
-        $tx_outs \
-        --fee $transaction_fee \
-        --protocol-params-file "$PPARAMS_FILE" \
-        --out-file "${tx_prefix}.raw"
-    
-    # Sign the transaction
-    cardano-cli conway transaction sign \
-        --tx-body-file "${tx_prefix}.raw" \
-        --signing-key-file "$GENESIS_SKEY_FILE" \
-        --testnet-magic $TESTNET_MAGIC \
-        --out-file "${tx_prefix}.signed"
-    
-    # Submit the transaction
-    cardano-cli conway transaction submit \
-        --tx-file "${tx_prefix}.signed" \
-        --testnet-magic $TESTNET_MAGIC
-    
-    echo -e "${GREEN}Transaction submitted successfully!${NC}"
-    
-    # Clean up transaction files
-    rm -f "${tx_prefix}.draft" "${tx_prefix}.raw" "${tx_prefix}.signed"
-}
+# Plan for desired leaves
+split_plan "$TARGET" "$CAP"
+: "${LEVELS:?}" "${TOTAL_SPLIT_TXS:?}"
 
-# Function to get all UTxOs at the genesis address
-get_utxos() {
-    local utxo_output=$(cardano-cli conway query utxo \
-        --address "$GENESIS_ADDR" \
-        --testnet-magic $TESTNET_MAGIC)
-    
-    echo "$utxo_output"
-}
-
-# Function to parse UTxO line and return hash, index, amount
-parse_utxo_line() {
-    local utxo_line="$1"
-    local utxo_hash=$(echo "$utxo_line" | awk '{print $1}')
-    local utxo_index=$(echo "$utxo_line" | awk '{print $2}')
-    local utxo_amount=$(echo "$utxo_line" | awk '{print $3}')
-    
-    echo "$utxo_hash $utxo_index $utxo_amount"
-}
-
-# Verify prerequisites
-echo -e "${YELLOW}Checking prerequisites...${NC}"
-check_cardano_cli
-check_file "$GENESIS_ADDR_FILE"
-check_file "$GENESIS_SKEY_FILE"
-
-# Query protocol parameters
-echo -e "${YELLOW}Querying protocol parameters...${NC}"
-cardano-cli conway query protocol-parameters \
-    --out-file "$PPARAMS_FILE" \
-    --testnet-magic $TESTNET_MAGIC
-
-check_file "$PPARAMS_FILE"
-echo -e "${GREEN}Protocol parameters saved to $PPARAMS_FILE${NC}"
-
-# Get genesis address
-GENESIS_ADDR=$(cat "$GENESIS_ADDR_FILE")
-echo -e "${YELLOW}Genesis address: $GENESIS_ADDR${NC}"
-
-echo -e "\n${BLUE}=== STAGE 1: Initial Split ===${NC}"
-
-# Query initial UTxO
-echo -e "${YELLOW}Querying genesis UTxO...${NC}"
-INITIAL_UTXO_OUTPUT=$(get_utxos)
-echo "Initial UTxO Query Result:"
-echo "$INITIAL_UTXO_OUTPUT"
-
-# Parse initial UTxO
-INITIAL_UTXO_LINE=$(echo "$INITIAL_UTXO_OUTPUT" | grep -v "TxHash\|^-" | head -n 1 | xargs)
-
-if [[ -z "$INITIAL_UTXO_LINE" ]]; then
-    echo -e "${RED}Error: No UTxO found at genesis address${NC}"
-    exit 1
+# ---------- per-level amounts (AMTS[]) ----------
+declare -ag AMTS=()
+if (( LEVELS > 0 )); then
+  AMTS[$((LEVELS-1))]="$LEAF"
+  for ((i=LEVELS-2; i>=0; i--)); do
+    AMTS[$i]=$(( BFS[i+1] * AMTS[i+1] + FEE_MARGIN + CHANGE_MIN ))
+  done
 fi
+for ((i=0;i<LEVELS;i++)); do
+  [[ -v "BFS[$i]" && -v "AMTS[$i]" ]] || { echo "planner/amounts not set" >&2; exit 1; }
+done
 
-# Extract initial UTxO details
-read INITIAL_HASH INITIAL_INDEX INITIAL_AMOUNT <<< $(parse_utxo_line "$INITIAL_UTXO_LINE")
+# ---------- helpers ----------
+wait_blocks(){ # n_blocks
+  local n="${1:-2}" s c
+  s=$(cardano-cli conway query tip --testnet-magic "$MAGIC" | jq -r '.slot // .slotNo // 0')
+  while true; do
+    sleep 1
+    c=$(cardano-cli conway query tip --testnet-magic "$MAGIC" | jq -r '.slot // .slotNo // 0')
+    (( c - s >= n )) && break
+  done
+}
 
-echo -e "${GREEN}Found initial UTxO:${NC}"
-echo "  Hash: $INITIAL_HASH"
-echo "  Index: $INITIAL_INDEX"
-echo "  Amount: $INITIAL_AMOUNT lovelace"
+wait_for_inputs(){ # addr file_with_txins
+  local addr="$1" file="$2" need have
+  need=$(wc -l <"$file")
+  [[ "$need" -eq 0 ]] && return 0
+  while true; do
+    have=$(
+      cardano-cli conway query utxo --address "$addr" --testnet-magic "$MAGIC" \
+      | awk 'NR>2{print $1"#"$2}' | grep -F -f "$file" | wc -l || true
+    )
+    (( have >= need )) && break
+    sleep 1
+  done
+}
 
-# Perform Stage 1 split
-split_utxo "$INITIAL_HASH" "$INITIAL_INDEX" "$INITIAL_AMOUNT" "$STAGE1_SPLITS" "stage1_tx"
-wait_for_confirmation
+wait_for_txin(){ # addr txid#ix
+  local addr="$1" txin="$2"
+  while true; do
+    cardano-cli conway query utxo --address "$addr" --testnet-magic "$MAGIC" \
+      | awk 'NR>2{print $1"#"$2}' | grep -qx "$txin" && return 0
+    sleep 0.5
+  done
+}
 
-echo -e "\n${BLUE}=== STAGE 2: Secondary Splits ===${NC}"
+first_genesis_txin(){
+  cardano-cli conway query utxo --address "$GENESIS_ADDR" --testnet-magic "$MAGIC" \
+  | awk 'NR==3{print $1"#"$2}'
+}
 
-# Query UTxOs after stage 1
-echo -e "${YELLOW}Querying UTxOs after stage 1...${NC}"
-STAGE2_UTXO_OUTPUT=$(get_utxos)
-echo "Stage 2 UTxO Query Result:"
-echo "$STAGE2_UTXO_OUTPUT"
+# Build + sign + submit a split from one tx-in, possibly in multiple chunks.
+# Records child outputs as "txid#index" lines in a .next file for the next level. Thanks ChatGPT
+do_split_one(){ # lvl txin b amt pay_to change_addr sign_key
+  local lvl="$1" txin="$2" b="$3" amt="$4" pay="$5" change="$6" skey="$7"
+  local work="fanout_work/l$lvl"; mkdir -p "$work/parts"
+  local part="$work/parts/$(tr -dc a-f0-9 </dev/urandom | head -c 8).next"; : > "$part"
 
-# Parse all UTxOs and split each one
-counter=1
+  local remain="$b"
+  while (( remain > 0 )); do
+    local k=$(( remain > MAX_OUTS_PER_TX ? MAX_OUTS_PER_TX : remain ))
+    local base="$work/$(tr -dc a-f0-9 </dev/urandom | head -c 8)"
+    local -a OUTS=()
+    for ((j=0;j<k;j++)); do OUTS+=( --tx-out "$pay+$amt" ); done
 
-# Filter out header lines and get actual UTxO data
-FILTERED_UTXOS=$(echo "$STAGE2_UTXO_OUTPUT" | grep -v "TxHash\|^-" | grep -v "^$")
+    cardano-cli conway transaction build \
+      --tx-in "$txin" "${OUTS[@]}" --change-address "$change" \
+      --testnet-magic "$MAGIC" --out-file "$base.txbody" >/dev/null
 
-echo -e "${YELLOW}Filtered UTxOs to process:${NC}"
-echo "$FILTERED_UTXOS"
+    local txid; txid=$(cardano-cli conway transaction txid --tx-body-file "$base.txbody")
 
-while IFS= read -r utxo_line; do
-    # Skip empty lines
-    if [[ -z "$utxo_line" ]]; then
-        continue
-    fi
-    
-    # Clean up the line (remove extra whitespace)
-    utxo_line=$(echo "$utxo_line" | xargs)
-    
-    # Parse UTxO details
-    read utxo_hash utxo_index utxo_amount <<< $(parse_utxo_line "$utxo_line")
-    
-    # Validate that we have proper hex hash (64 characters)
-    if [[ -n "$utxo_hash" && -n "$utxo_index" && -n "$utxo_amount" && ${#utxo_hash} -eq 64 ]]; then
-        echo -e "\n${YELLOW}Processing UTxO $counter: ${utxo_hash}#${utxo_index} (${utxo_amount} lovelace)${NC}"
-        split_utxo "$utxo_hash" "$utxo_index" "$utxo_amount" "$STAGE2_SPLITS" "stage2_tx_$counter"
-        wait_for_confirmation
-        ((counter++))
-    else
-        echo -e "${RED}Skipping invalid UTxO line: $utxo_line${NC}"
-        echo -e "${RED}Parsed values: hash='$utxo_hash' index='$utxo_index' amount='$utxo_amount'${NC}"
-    fi
-done <<< "$FILTERED_UTXOS"
+    cardano-cli conway transaction sign \
+      --signing-key-file "$skey" --testnet-magic "$MAGIC" \
+      --tx-body-file "$base.txbody" --out-file "$base.signed" >/dev/null
 
-echo -e "\n${GREEN}=== All splits completed successfully! ===${NC}"
-echo -e "${GREEN}Genesis UTxO has been split into $((STAGE1_SPLITS * STAGE2_SPLITS)) UTxOs${NC}"
+    local ok=0
+    for _ in {1..10}; do
+      if cardano-cli conway transaction submit --tx-file "$base.signed" --testnet-magic "$MAGIC" >/dev/null 2>"$base.err"; then
+        ok=1; break
+      fi
+      sleep 1
+    done
+    (( ok == 1 )) || { echo "submit failed (lvl=$lvl, txin=$txin)"; sed 's/^/  /' "$base.err" >&2 || true; exit 1; }
 
-# Clean up protocol parameters file
-rm -f "$PPARAMS_FILE"
+    # Children from this chunk are indices [0..k-1]
+    for ((j=0;j<k;j++)); do echo "$txid#$j" >> "$part"; done
 
-echo -e "\n${YELLOW}Final UTxO state:${NC}"
-get_utxos
+    # Next chunk spends the change output at index k -> wait until it exists
+    local next_in="$txid#$k"
+    wait_for_txin "$change" "$next_in"
+    txin="$next_in"
+    remain=$(( remain - k ))
+  done
+}
+export MAGIC CAP LEAF FEE_MARGIN CHANGE_MIN THREADS STATE_DIR
+export MAX_OUTS_PER_TX
+export GENESIS_ADDR GENESIS_SKEY OWNER_ADDR OWNER_SKEY
+export -f do_split_one wait_for_txin
 
-echo -e "\n${GREEN}You can query the final UTxOs with:${NC}"
-echo "cardano-cli conway query utxo --address $GENESIS_ADDR --testnet-magic $TESTNET_MAGIC"
+# ---------- Tele ----------
+echo "Branching factors: ${BFS[*]}"
+echo "Txs per level: ${TXS_PER_LEVEL[*]}"
+echo "Total split txs: $TOTAL_SPLIT_TXS"
+
+# ---------- bootstrap ----------
+mkdir -p fanout_work
+g0="$(first_genesis_txin)"
+[[ -n "$g0" ]] || { echo "no genesis UTxO found at $GENESIS_ADDR" >&2; exit 1; }
+printf '%s\n' "$g0" > fanout_work/inputs_l0.txt
+
+overall_start=$(date +%s)
+
+# ---------- main levels ----------
+for ((lvl=0; lvl<LEVELS; lvl++)); do
+  b="${BFS[lvl]}"
+  amt="${AMTS[lvl]}"
+  in_file="fanout_work/inputs_l${lvl}.txt"
+  next_file="fanout_work/inputs_l$((lvl+1)).txt"
+  rm -f "$next_file"
+  rm -rf "fanout_work/l$lvl"
+  mkdir -p "fanout_work/l$lvl/parts"
+
+  # Routing: keep funds at genesis until final level; final pays to owner.
+  if (( lvl < LEVELS - 1 )); then
+    pay_to="$GENESIS_ADDR"; change_to="$GENESIS_ADDR"; sign_with="$GENESIS_SKEY"; next_addr="$GENESIS_ADDR"
+  else
+    pay_to="$OWNER_ADDR";  change_to="$GENESIS_ADDR";  sign_with="$GENESIS_SKEY"; next_addr="$OWNER_ADDR"
+  fi
+
+  # Ensure inputs exist at the address that holds them
+  if (( lvl > 0 )); then
+    wait_for_inputs "$GENESIS_ADDR" "$in_file"
+  fi
+
+  mapfile -t CUR_INPUTS < "$in_file"
+  n=${#CUR_INPUTS[@]}
+  echo "Level $lvl: b=$b, amt=$amt, txs=$n, threads=$THREADS"
+  lvl_start=$(date +%s)
+
+  if (( n > 0 )); then
+    printf '%s\n' "${CUR_INPUTS[@]}" \
+    | xargs -I{} -P "$THREADS" bash -c \
+      'set -euo pipefail; do_split_one "$1" "$2" "$3" "$4" "$5" "$6" "$7"' _ \
+      "$lvl" {} "$b" "$amt" "$pay_to" "$change_to" "$sign_with"
+  fi
+
+  if compgen -G "fanout_work/l$lvl/parts/"'*.next' > /dev/null; then
+    cat fanout_work/l"$lvl"/parts/*.next > "$next_file"
+    wait_for_inputs "$next_addr" "$next_file"
+  else
+    : > "$next_file"
+  fi
+
+  echo "Level $lvl done in $(( $(date +%s) - lvl_start ))s"
+  wait_blocks 2
+done
+
+echo "All done in $(( $(date +%s) - overall_start ))s"
