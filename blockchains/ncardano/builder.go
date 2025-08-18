@@ -6,9 +6,19 @@ import (
 	"diablo-benchmark/util"
 	"encoding/binary"
 	"fmt"
+	"context"
 
 	"github.com/blinklabs-io/gouroboros/ledger/common"
 )
+
+func ctxErr(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+		return nil
+	}
+}
 
 type BlockchainBuilder struct {
 	logger       core.Logger

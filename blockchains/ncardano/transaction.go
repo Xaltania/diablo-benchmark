@@ -51,8 +51,8 @@ func NewTransferTransaction(params TransferParams) (transaction, error) {
 	fmt.Printf("[TRACE] Creating new transfer transaction - To: %s, Amount: %d\n", params.ToAddress, params.Amount)
 
 	// Load pre-prepared transaction
-	preparedTxCounter = (preparedTxCounter % 100) + 1
-	txFileName := fmt.Sprintf("tx_%03d.signed", preparedTxCounter)
+	preparedTxCounter = (preparedTxCounter % 1000000) + 1
+	txFileName := fmt.Sprintf("%06d.tx", preparedTxCounter)
 	txPath := filepath.Join(preparedTxDir, txFileName)
 
 	// Read the transaction file
