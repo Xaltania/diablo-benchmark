@@ -10,3 +10,5 @@ diablo
 wallet/
 
 **/prepared_transactions/*
+**/fanout_work/*
+**/venv/*
