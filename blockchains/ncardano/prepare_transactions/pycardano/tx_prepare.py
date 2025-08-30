@@ -16,7 +16,7 @@ ADDR_FILE = os.getenv("OWNER_ADDR_FILE", "/home/ubuntu/cardano/cardano-node-test
 SKEY_FILE = os.getenv("OWNER_SKEY_FILE", "/home/ubuntu/cardano/cardano-node-tests/dev_workdir/state-cluster0/nodes/node-pool1/owner-utxo.skey")
 SOCKET    = os.getenv("CARDANO_NODE_SOCKET_PATH", "/home/ubuntu/cardano/cardano-node-tests/dev_workdir/state-cluster0/bft1.socket")
 MAGIC     = os.getenv("MAGIC", "42")
-FEE       = int(os.getenv("FEE", "200000"))     # fixed fee as in pycardano_test.py
+FEE       = int(os.getenv("FEE", "200000"))
 TTL_DELTA = int(os.getenv("TTL_DELTA", "0"))    # 0 = omit ttl to avoid expiry
 OUTDIR    = Path(os.getenv("OUTDIR", "../prepared_transactions"))
 
@@ -52,7 +52,7 @@ def ensure_outdir():
 def main():
     addr = Path(ADDR_FILE).read_text().strip()
     sk = PaymentSigningKey.load(SKEY_FILE)
-    vk = PaymentVerificationKey.from_signing_key(sk)
+    vk = PaymentVerificationKey.from_signing_key(sk) # Shorten by just loading vkey?
 
     ensure_outdir()
 
@@ -75,12 +75,16 @@ def main():
         sendable = amt - FEE
         tx_out = TransactionOutput.from_primitive([addr, sendable])
 
+        # Inputs must be a set to encode as CBOR tag 258 apparently
+        inputs = {tx_in}
+        outputs = [tx_out]
+
         # Build body. Omit ttl by default to avoid OutsideValidityIntervalUTxO.
         if TTL_DELTA > 0:
             ttl = get_tip_slot() + TTL_DELTA
-            body = TransactionBody(inputs=[tx_in], outputs=[tx_out], fee=FEE, ttl=ttl)
+            body = TransactionBody(inputs=inputs, outputs=outputs, fee=FEE, ttl=ttl)
         else:
-            body = TransactionBody(inputs=[tx_in], outputs=[tx_out], fee=FEE)
+            body = TransactionBody(inputs=inputs, outputs=outputs, fee=FEE)
 
         sig = sk.sign(body.hash())
         wset = TransactionWitnessSet(vkey_witnesses=[VerificationKeyWitness(vk, sig)])
