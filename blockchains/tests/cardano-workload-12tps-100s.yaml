@@ -1,0 +1,21 @@
+let:
+  - &n { sample: !integer { from: 4, to: 4 } }
+
+  - !loop &a { sample: !account { number: *n, stake: 1000000000 } }
+
+  - !loop &l     { sample: !location [ ".*"     ] }
+
+  - !iter &e     { sample: !endpoint [ ".*"     ] }
+
+  - &tps { sample: !float { from: 12, to: 12.01 } }
+  - &d { sample: !integer { from: 100, to: 100 } }
+
+workloads:
+  - number: 1
+    client:
+      location: *l
+      view: *e
+      behavior:
+        - interaction: !transfer { from: *a, to: *a }
+          load: { 0: *tps, *d: 0 }
+

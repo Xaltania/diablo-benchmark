@@ -2,11 +2,11 @@ package ncardano
 
 import (
 	"bytes"
+	"context"
 	"diablo-benchmark/core"
 	"diablo-benchmark/util"
 	"encoding/binary"
 	"fmt"
-	"context"
 
 	"github.com/blinklabs-io/gouroboros/ledger/common"
 )
@@ -77,12 +77,14 @@ func (b *BlockchainBuilder) EncodeTransfer(stake int, from, to interface{}, info
 	// Log the transaction creation in the primary
 	b.logger.Tracef("Created transaction with hash: %s", conwayTx.Hash().String())
 
-	// Get the CBOR bytes for the transaction
-	txBytes := conwayTx.Cbor()
+	/// Using original bytes now
+	txBytes, err := tx.GetTxBytes()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get transaction bytes: %w", err)
+	}
 	if len(txBytes) == 0 {
 		return nil, fmt.Errorf("failed to get transaction bytes: empty result")
 	}
-
 	return txBytes, nil
 }
 

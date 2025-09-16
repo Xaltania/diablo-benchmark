@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # tx_splitter.py
 # Plan branching then split a funding UTxO across levels to produce many leaf UTxOs.
-# Simplified: only supports `python3 tx_splitter.py <target> --threads N --equal-split`
+# Now requires explicit flags for paths and network.
 
 import argparse
 import json
@@ -16,31 +16,45 @@ from pathlib import Path
 from threading import Semaphore
 from typing import List, Tuple, Dict
 
-# ---------- defaults ----------
-DEF_MAGIC = int(os.getenv("MAGIC", "42"))
-DEF_STATE = Path(os.getenv("STATE_DIR", str(Path.home() / "cardano/cardano-node-tests/dev_workdir/state-cluster0")))
+# ---------- tunables (env overrides allowed) ----------
 DEF_THREADS = int(os.getenv("THREADS", str(os.cpu_count() or 4)))
 DEF_CAP = int(os.getenv("CAP", "200"))
-DEF_LEAF = int(os.getenv("LEAF", "2000000"))  # unused in equal-split mode but kept for env compatibility
+DEF_LEAF = int(os.getenv("LEAF", "2000000"))
 DEF_FEE_MARGIN = int(os.getenv("FEE_MARGIN", "2000000"))
 DEF_CHANGE_MIN = int(os.getenv("CHANGE_MIN", "1200000"))
 DEF_MIN_OUTPUT = int(os.getenv("MIN_OUTPUT", "1000000"))  # floor per produced output
 DEF_MAX_OUTS = int(os.getenv("MAX_OUTS_PER_TX", str(DEF_CAP)))
-DEF_SOCKET = os.getenv("CARDANO_NODE_SOCKET_PATH", str(DEF_STATE / "bft1.socket"))
 
-GENESIS_ADDR_FILE = DEF_STATE / "shelley/genesis-utxo.addr"
-GENESIS_SKEY_FILE = DEF_STATE / "shelley/genesis-utxo.skey"
-OWNER_ADDR_FILE   = DEF_STATE / "nodes/node-pool1/owner.addr"
-OWNER_SKEY_FILE   = DEF_STATE / "nodes/node-pool1/owner-utxo.skey"  # not used here, left for compatibility
+# ---------- globals set from CLI ----------
+TESTNET_MAGIC: int | None = None
+SOCKET_PATH: str | None = None
 
 # throttles (set in main)
 BUILD_SEM: Semaphore | None = None
 SUBMIT_SEM: Semaphore | None = None
 
 # ---------- utilities ----------
+def read_address_from_file(path_like: Path | str) -> str:
+    """Read an address file containing either a bech32 string or JSON with 'address'."""
+    text = Path(path_like).read_text().strip()
+    if not text:
+        return ""
+    if text.startswith("{"):
+        try:
+            data = json.loads(text)
+            if isinstance(data, dict):
+                addr = data.get("address")
+                if isinstance(addr, str) and addr:
+                    return addr.strip()
+        except Exception:
+            pass
+    return text
+
 def sh(args, *, capture=True) -> str:
     env = os.environ.copy()
-    env["CARDANO_NODE_SOCKET_PATH"] = DEF_SOCKET
+    if not SOCKET_PATH:
+        raise RuntimeError("Socket path not set")
+    env["CARDANO_NODE_SOCKET_PATH"] = SOCKET_PATH
 
     for i in range(6):
         try:
@@ -63,6 +77,8 @@ def sh(args, *, capture=True) -> str:
             raise RuntimeError(f"cmd failed: {' '.join(args)}\n{msg}") from e
 
 def cli(args, capture=True) -> str:
+    if TESTNET_MAGIC is None:
+        raise RuntimeError("Testnet magic not set")
     cmd = ["cardano-cli", "conway", *args]
 
     needs_magic = False
@@ -73,7 +89,7 @@ def cli(args, capture=True) -> str:
             if args[1] in ("build", "submit"):
                 needs_magic = True
     if needs_magic:
-        cmd += ["--testnet-magic", str(DEF_MAGIC)]
+        cmd += ["--testnet-magic", str(TESTNET_MAGIC)]
     return sh(cmd, capture=capture)
 
 def rand_hex(n=8) -> str:
@@ -101,7 +117,6 @@ def split_plan(N: int, CAP: int) -> Dict:
         TXS = [1]
         return dict(levels=1, branching_factors=BFS, txs_per_level=TXS, total_split_txs=sum(TXS), final_outputs_produced=math.prod(BFS))
 
-    # minimal levels
     L = 1
     while ipow(CAP, L) < N:
         L += 1
@@ -178,8 +193,8 @@ def wait_for_inputs(addr: str, needed_txins: List[str]):
             return
         time.sleep(1)
 
-def first_genesis_txin(gen_addr: str) -> str:
-    keys = utxo_keys(gen_addr)
+def first_txin_at(addr: str) -> str:
+    keys = utxo_keys(addr)
     return keys[0] if keys else ""
 
 # ---------- splitting ----------
@@ -221,7 +236,7 @@ def build_sign_submit(txin: str, outs: List[Tuple[str, int]], change_addr: str, 
     except RuntimeError:
         txid = cli(["transaction", "txid", "--tx-body-file", body])
 
-    # submit with retry and throttle (socket use)
+    # submit with retry and throttle
     last_err = None
     for _ in range(10):
         try:
@@ -295,32 +310,40 @@ def do_split_one(
 
 # ---------- main ----------
 def main():
-    global BUILD_SEM, SUBMIT_SEM  # set from args or constants
+    global BUILD_SEM, SUBMIT_SEM
+    global TESTNET_MAGIC, SOCKET_PATH
 
-    ap = argparse.ArgumentParser(description="Plan branching and split a funding UTxO into many leaves. Equal-split only.")
+    ap = argparse.ArgumentParser(
+        description="Plan branching and split a funding UTxO into many leaves. Equal-split only."
+    )
     ap.add_argument("target", type=int, help="desired leaf UTxOs")
+    ap.add_argument("-s", "--socket-path", type=str, required=True, help="path to CARDANO_NODE_SOCKET_PATH")
+    ap.add_argument("-m", "--testnet-magic", type=int, required=True, help="testnet magic number")
+    ap.add_argument("-i", "--input-address", type=Path, required=True, help="file containing funding address (.addr or JSON with 'address')")
+    ap.add_argument("-o", "--output-address", type=Path, required=True, help="file containing final leaves address")
+    ap.add_argument("-k", "--skey", type=Path, required=True, help="signing key file used to spend funding and change")
     ap.add_argument("--threads", type=int, default=DEF_THREADS, help="parallel splits per level")
-    ap.add_argument("--equal-split", action="store_true", help="split each input equally among outputs at build time (required)")
     args = ap.parse_args()
 
-    if not args.equal_split:
-        print("Only --equal-split mode is supported in this simplified script.", file=sys.stderr)
-        sys.exit(2)
+    TESTNET_MAGIC = int(args.testnet_magic)
+    SOCKET_PATH = args.socket_path
 
-    # fixed throttles (kept conservative)
+    # fixed throttles
     BUILD_SEM = Semaphore(6)
     SUBMIT_SEM = Semaphore(12)
 
     # prerequisites
-    for f in [GENESIS_ADDR_FILE, GENESIS_SKEY_FILE, OWNER_ADDR_FILE]:
-        if not f.exists():
+    for f in [args.input_address, args.output_address, args.skey]:
+        if not Path(f).exists():
             print(f"missing: {f}", file=sys.stderr)
             sys.exit(1)
-    if not Path(DEF_SOCKET).exists():
-        print(f"missing socket: {DEF_SOCKET}", file=sys.stderr)
+    if not Path(SOCKET_PATH).exists():
+        print(f"missing socket: {SOCKET_PATH}", file=sys.stderr)
         sys.exit(1)
-    genesis_addr = GENESIS_ADDR_FILE.read_text().strip()
-    owner_addr = OWNER_ADDR_FILE.read_text().strip()
+
+    input_addr = read_address_from_file(args.input_address)
+    output_addr = read_address_from_file(args.output_address)
+    sign_key = str(args.skey)
 
     plan = split_plan(args.target, DEF_CAP)
     BFS = plan["branching_factors"]
@@ -333,14 +356,13 @@ def main():
     print("Branching factors:", " ".join(map(str, BFS)))
     print("Txs per level:", " ".join(map(str, TXS)))
     print("Total split txs:", plan["total_split_txs"])
-    print("Mode: equal-split per input")
 
     workroot = Path("fanout_work")
     workroot.mkdir(exist_ok=True)
 
-    g0 = first_genesis_txin(genesis_addr)
+    g0 = first_txin_at(input_addr)
     if not g0:
-        print(f"no genesis UTxO found at {genesis_addr}", file=sys.stderr)
+        print(f"no UTxO found at {input_addr}", file=sys.stderr)
         sys.exit(1)
 
     (workroot / "inputs_l0.txt").write_text(g0 + "\n")
@@ -361,13 +383,13 @@ def main():
         parts_dir.mkdir(parents=True, exist_ok=True)
 
         if lvl < L - 1:
-            pay_to, change_to, sign_with, next_addr = genesis_addr, genesis_addr, str(GENESIS_SKEY_FILE), genesis_addr
+            pay_to, change_to, next_addr, current_addr = input_addr, input_addr, input_addr, input_addr
         else:
-            pay_to, change_to, sign_with, next_addr = owner_addr, genesis_addr, str(GENESIS_SKEY_FILE), owner_addr
+            pay_to, change_to, next_addr, current_addr = output_addr, input_addr, output_addr, input_addr
 
         if lvl > 0:
             need = in_file.read_text().splitlines()
-            wait_for_inputs(genesis_addr, need)
+            wait_for_inputs(input_addr, need)
 
         cur_inputs = [x for x in in_file.read_text().splitlines() if x.strip()]
         n = len(cur_inputs)
@@ -380,7 +402,7 @@ def main():
                 futs = [
                     ex.submit(
                         do_split_one,
-                        lvl, txin, b, pay_to, change_to, sign_with, lvl_dir, genesis_addr
+                        lvl, txin, b, pay_to, change_to, sign_key, lvl_dir, current_addr
                     )
                     for txin in cur_inputs
                 ]

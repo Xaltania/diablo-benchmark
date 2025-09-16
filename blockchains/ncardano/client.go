@@ -280,13 +280,14 @@ func NewBlockchainClient(logger core.Logger, socketPath string) (*BlockchainClie
 }
 
 func (c *BlockchainClient) DecodePayload(cbor_bytes []byte) (interface{}, error) {
-	tx, err := decodeTransaction(cbor_bytes) // Returns ConwayTransaction
-	// conway.NewConwayTransactionFromCbor(encoded) // Note the buffer wrapper in the original
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode CBOR payload: %w", err)
-	}
-	c.logger.Tracef("decode transaction: %s", tx.Hash().String()) // Blake2b256 hash
-	return tx, nil
+	return cbor_bytes, nil // Trying without re-serialising
+	// tx, err := decodeTransaction(cbor_bytes) // Returns ConwayTransaction
+	// // conway.NewConwayTransactionFromCbor(encoded) // Note the buffer wrapper in the original
+	// if err != nil {
+	// 	return nil, fmt.Errorf("failed to decode CBOR payload: %w", err)
+	// }
+	// c.logger.Tracef("decode transaction: %s", tx.Hash().String()) // Blake2b256 hash
+	// return tx, nil
 }
 
 func (c *BlockchainClient) Close() error {
@@ -305,28 +306,31 @@ func (c *BlockchainClient) TriggerInteraction(iact core.Interaction) error {
 
 	// Handle different payload types
 	var tx *conway.ConwayTransaction
+	var txBytes []byte
+
 	switch p := payload.(type) {
-	case *conway.ConwayTransaction:
-		tx = p
 	case []byte:
-		// If payload is bytes, decode it
+		txBytes = p
 		var err error
 		tx, err = decodeTransaction(p)
 		if err != nil {
 			return fmt.Errorf("failed to decode transaction bytes: %w", err)
 		}
 	case string:
-		// If payload is a hex string, decode it
-		txBytes, err := hex.DecodeString(p)
+		b, err := hex.DecodeString(p)
 		if err != nil {
 			return fmt.Errorf("failed to decode hex payload: %w", err)
 		}
-		tx, err = decodeTransaction(txBytes)
+		txBytes = b
+		tx, err = decodeTransaction(b)
 		if err != nil {
-			return fmt.Errorf("failed to decode transaction from hex: %w", err)
+			return fmt.Errorf("failed to decode transaction bytes: %w", err)
 		}
+	case *conway.ConwayTransaction:
+		tx = p
+		txBytes = p.Cbor() // last resort; primary should send []byte
 	default:
-		return fmt.Errorf("invalid payload type %T, expected *conway.ConwayTransaction, []byte, or string", payload)
+		return fmt.Errorf("invalid payload type %T, expected []byte, hex string, or *conway.ConwayTransaction", payload)
 	}
 
 	if tx == nil {
@@ -351,9 +355,6 @@ func (c *BlockchainClient) TriggerInteraction(iact core.Interaction) error {
 	if err != nil {
 		return err
 	}
-
-	// Get transaction bytes for submission
-	txBytes := tx.Cbor()
 
 	// Report submission before sending
 	iact.ReportSubmit()

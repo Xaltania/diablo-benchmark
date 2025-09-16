@@ -1,0 +1,17 @@
+interface: "cardano"
+
+parameters:
+  redundancy: 1
+
+endpoints: # Not used yet
+- addresses:
+  - /tmp/testnet/pool/node.socket
+# sockets: # Update to JSON-RPC
+
+  # - 127.0.0.1:23000
+  # - 127.0.0.1:23005
+  # - 127.0.0.1:23010
+  # - 127.0.0.1:23015
+  tags:
+    - 127.0.0.1
+  

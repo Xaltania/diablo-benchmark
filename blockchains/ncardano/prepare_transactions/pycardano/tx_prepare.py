@@ -1,64 +1,146 @@
 #!/usr/bin/env python3
-# Build & sign one owner->owner transaction PER UTxO at the address.
-# Queries UTxOs via cardano-cli. Constructs and signs with pycardano.
-# Outputs JSON files accepted by `cardano-cli conway transaction submit`.
+# build_owner_txs.py
+# Build and sign one transaction per UTxO at the input address.
+# Inputs are sent to the output address (can be the same as input).
+# Produces JSON files that `cardano-cli conway transaction submit` accepts.
 
-import os, json, subprocess, sys, time
+import argparse
+import json
+import os
+import subprocess
+import sys
+import time
 from pathlib import Path
 from pycardano import (
-    Transaction, TransactionBody, TransactionInput, TransactionOutput,
-    TransactionWitnessSet, VerificationKeyWitness,
-    PaymentSigningKey, PaymentVerificationKey
+    Transaction,
+    TransactionBody,
+    TransactionInput,
+    TransactionOutput,
+    TransactionWitnessSet,
+    VerificationKeyWitness,
+    PaymentSigningKey,
+    PaymentVerificationKey,
 )
 
-# ---------- config ----------
-ADDR_FILE = os.getenv("OWNER_ADDR_FILE", "/home/ubuntu/cardano/cardano-node-tests/dev_workdir/state-cluster0/nodes/node-pool1/owner.addr")
-SKEY_FILE = os.getenv("OWNER_SKEY_FILE", "/home/ubuntu/cardano/cardano-node-tests/dev_workdir/state-cluster0/nodes/node-pool1/owner-utxo.skey")
-SOCKET    = os.getenv("CARDANO_NODE_SOCKET_PATH", "/home/ubuntu/cardano/cardano-node-tests/dev_workdir/state-cluster0/bft1.socket")
-MAGIC     = os.getenv("MAGIC", "42")
-FEE       = int(os.getenv("FEE", "200000"))
-TTL_DELTA = int(os.getenv("TTL_DELTA", "0"))    # 0 = omit ttl to avoid expiry
-OUTDIR    = Path(os.getenv("OUTDIR", "../prepared_transactions"))
+# ---------- globals from CLI ----------
+TESTNET_MAGIC: int | None = None
+SOCKET_PATH: str | None = None
+FEE: int = 200_000
+TTL_DELTA: int = 0
+OUTDIR: Path = Path("./prepared_transactions")
+
 
 # ---------- helpers ----------
-def run_cli(args, capture=True):
-    cmd = ["cardano-cli", "conway", *args, "--testnet-magic", str(MAGIC), "--socket-path", str(SOCKET)]
-    proc = subprocess.run(cmd, stdout=subprocess.PIPE if capture else None, stderr=subprocess.PIPE, text=True)
-    if proc.returncode != 0:
-        print(proc.stderr, file=sys.stderr)
-        raise SystemExit(proc.returncode)
-    return proc.stdout if capture else ""
+def read_address_from_file(path_like: Path | str) -> str:
+    """Read an address file containing either a bech32 string or JSON with 'address'."""
+    text = Path(path_like).read_text(encoding="utf-8").strip()
+    if not text:
+        raise ValueError(f"empty address file: {path_like}")
+    if text.startswith("{"):
+        try:
+            data = json.loads(text)
+            if isinstance(data, dict):
+                for key in ("address", "addr", "bech32", "bech32Address"):
+                    val = data.get(key)
+                    if isinstance(val, str) and val.strip():
+                        return val.strip()
+        except json.JSONDecodeError:
+            pass
+        raise ValueError(f"address JSON missing a usable field: {path_like}")
+    return text
 
-def get_tip_slot():
-    tip = json.loads(run_cli(["query", "tip"]))
+
+def cli(args: list[str], *, capture: bool = True) -> str:
+    """Run cardano-cli conway ... with testnet magic and socket env."""
+    if TESTNET_MAGIC is None or not SOCKET_PATH:
+        raise RuntimeError("network flags not initialised")
+    env = os.environ.copy()
+    env["CARDANO_NODE_SOCKET_PATH"] = SOCKET_PATH
+    cmd = ["cardano-cli", "conway", *args, "--testnet-magic", str(TESTNET_MAGIC)]
+    p = subprocess.run(
+        cmd,
+        check=False,
+        env=env,
+        stdout=subprocess.PIPE if capture else subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if p.returncode != 0:
+        err = (p.stderr or "").strip()
+        raise RuntimeError(f"cardano-cli failed: {' '.join(cmd)}\n{err}")
+    return (p.stdout or "").strip()
+
+
+def get_tip_slot() -> int:
+    tip = json.loads(cli(["query", "tip"]))
     return int(tip.get("slot", tip.get("slotNo", 0)))
 
-def list_owner_utxos(addr: str):
-    j = json.loads(run_cli(["query", "utxo", "--address", addr, "--output-json"]))
-    utxos = []
+
+def list_utxos(addr: str) -> list[tuple[str, int, int]]:
+    """Return list of (txhash, index, lovelace)."""
+    j = json.loads(cli(["query", "utxo", "--address", addr, "--output-json"]))
+    out = []
     for k, v in j.items():
         if "#" not in k:
             continue
         txh, ix = k.split("#", 1)
         amt = int(v.get("value", {}).get("lovelace", 0))
-        utxos.append((txh, int(ix), amt))
-    utxos.sort(key=lambda t: (t[0], t[1]))
-    return utxos
+        out.append((txh, int(ix), amt))
+    out.sort(key=lambda t: (t[0], t[1]))
+    return out
 
-def ensure_outdir():
-    OUTDIR.mkdir(parents=True, exist_ok=True)
+
+def ensure_outdir(path: Path):
+    path.mkdir(parents=True, exist_ok=True)
+
 
 # ---------- main ----------
-def main():
-    addr = Path(ADDR_FILE).read_text().strip()
-    sk = PaymentSigningKey.load(SKEY_FILE)
-    vk = PaymentVerificationKey.from_signing_key(sk) # Shorten by just loading vkey?
+def parse_args() -> argparse.Namespace:
+    ap = argparse.ArgumentParser(
+        description="Build and sign one transaction per UTxO at the input address."
+    )
+    ap.add_argument("-s", "--socket-path", required=True, help="Path to node socket")
+    ap.add_argument("-m", "--testnet-magic", required=True, type=int, help="Testnet magic number")
+    ap.add_argument("-i", "--input-address", required=True, type=Path, help="File containing input address")
+    ap.add_argument("-o", "--output-address", required=True, type=Path, help="File containing output address")
+    ap.add_argument("-k", "--skey", required=True, type=Path, help="Payment signing key file")
+    ap.add_argument("--fee", type=int, default=200_000, help="Fixed fee per tx in lovelace")
+    ap.add_argument("--ttl-delta", type=int, default=0, help="Slots to add to current tip for ttl. 0 = omit ttl")
+    ap.add_argument("--outdir", type=Path, default=Path("./prepared_transactions"), help="Directory to write tx JSONs")
+    return ap.parse_args()
 
-    ensure_outdir()
 
-    utxos = list_owner_utxos(addr)
+def main() -> int:
+    global TESTNET_MAGIC, SOCKET_PATH, FEE, TTL_DELTA, OUTDIR
+
+    args = parse_args()
+    TESTNET_MAGIC = int(args.testnet_magic)
+    SOCKET_PATH = str(args.socket_path)
+    FEE = int(args.fee)
+    TTL_DELTA = int(args.ttl_delta)
+    OUTDIR = args.outdir
+
+    # validate files
+    for p in (args.input_address, args.output_address, args.skey):
+        if not Path(p).exists():
+            print(f"missing file: {p}", file=sys.stderr)
+            return 1
+    if not Path(SOCKET_PATH).exists():
+        print(f"missing socket: {SOCKET_PATH}", file=sys.stderr)
+        return 1
+
+    in_addr = read_address_from_file(args.input_address)
+    out_addr = read_address_from_file(args.output_address)
+
+    # keys
+    sk = PaymentSigningKey.load(str(args.skey))
+    vk = PaymentVerificationKey.from_signing_key(sk)
+
+    ensure_outdir(OUTDIR)
+
+    utxos = list_utxos(in_addr)
     if not utxos:
-        print("No UTxOs at owner address.")
+        print("No UTxOs at input address.")
         return 0
 
     print(f"UTxOs: {len(utxos)} | fee: {FEE} | out: {OUTDIR}")
@@ -73,13 +155,11 @@ def main():
 
         tx_in = TransactionInput.from_primitive([txh, ix])
         sendable = amt - FEE
-        tx_out = TransactionOutput.from_primitive([addr, sendable])
+        tx_out = TransactionOutput.from_primitive([out_addr, sendable])
 
-        # Inputs must be a set to encode as CBOR tag 258 apparently
         inputs = {tx_in}
         outputs = [tx_out]
 
-        # Build body. Omit ttl by default to avoid OutsideValidityIntervalUTxO.
         if TTL_DELTA > 0:
             ttl = get_tip_slot() + TTL_DELTA
             body = TransactionBody(inputs=inputs, outputs=outputs, fee=FEE, ttl=ttl)
@@ -99,7 +179,6 @@ def main():
         out_path = OUTDIR / f"{written:06d}.tx"
         with out_path.open("w", encoding="utf-8", newline="\n") as f:
             json.dump(data, f, indent=2)
-            f.write("\n")
 
         if idx % 200 == 0 or idx == len(utxos):
             elapsed = int(time.time() - start)
@@ -107,6 +186,7 @@ def main():
 
     print(f"Done. Written: {written} | Skipped: {skipped}. Files in {OUTDIR}/")
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())

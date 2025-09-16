@@ -75,14 +75,12 @@ func NewTransferTransaction(params TransferParams) (transaction, error) {
 
 	// Create a new base transaction that just returns the raw bytes
 	return newBaseTransaction(func(blockhash common.Blake2b256) (*conway.ConwayTransaction, error) {
-		// In the primary node, we don't need to decode the transaction
-		// We just need to return a dummy transaction that will be used to get the hash
 		tx, err := conway.NewConwayTransactionFromCbor(rawTxBytes)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create transaction from CBOR: %w", err)
 		}
 		return tx, nil
-	}, nil), nil
+	}, nil, rawTxBytes), nil
 }
 
 // decodeTransaction is only used by the secondary node to decode transactions
@@ -233,19 +231,26 @@ func hexToCbor(hexStr string) ([]byte, error) {
 type baseTransaction struct {
 	buildTx func(blockhash common.Blake2b256) (*conway.ConwayTransaction, error)
 	signers [][]byte
+	raw     []byte
 }
 
 func newBaseTransaction(
 	buildTx func(blockhash common.Blake2b256) (*conway.ConwayTransaction, error),
-	signers [][]byte) transaction {
-	return &baseTransaction{buildTx, signers}
+	signers [][]byte,
+	raw []byte,
+) transaction {
+	return &baseTransaction{buildTx: buildTx, signers: signers, raw: raw}
 }
 
 func (bt *baseTransaction) getTx(blockhash common.Blake2b256) (*conway.ConwayTransaction, error) {
 	return bt.buildTx(blockhash)
 }
 
+// Changed to not re-serialise
 func (bt *baseTransaction) GetTxBytes() ([]byte, error) {
+	if len(bt.raw) > 0 {
+		return bt.raw, nil
+	}
 	tx, err := bt.buildTx(common.Blake2b256{})
 	if err != nil {
 		return nil, err
@@ -285,5 +290,5 @@ func newTransferTransaction(params TransferParams, signers [][]byte) transaction
 		}
 		return tx.getTx(blockhash)
 	}
-	return newBaseTransaction(buildTx, signers)
+	return newBaseTransaction(buildTx, signers, nil)
 }

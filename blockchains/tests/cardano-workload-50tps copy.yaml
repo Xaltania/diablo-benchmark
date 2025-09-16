@@ -8,7 +8,7 @@ let:
   - !iter &e     { sample: !endpoint [ ".*"     ] }
 
   - &tps { sample: !float { from: 40.00, to: 50 } }
-  - &d { sample: !integer { from: 5, to: 5 } }
+  - &d { sample: !integer { from: 100, to: 100 } }
 
 workloads:
   - number: 1
