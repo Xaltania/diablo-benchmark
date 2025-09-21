@@ -24,15 +24,13 @@ const (
 	feeBaseEstimate = uint64(600_000)
 	feePerOutEst    = uint64(60_000)
 
-	buildTimeout  = 2 * time.Minute
-	signTimeout   = 1 * time.Minute
-	submitTimeout = 30 * time.Second
-	queryTimeout  = 30 * time.Second
-	waitStep      = 1 * time.Second
-	waitTotal     = 180 * time.Second // per-level wait
+	buildTimeout  = 90 * time.Second
+	signTimeout   = 45 * time.Second
+	submitTimeout = 20 * time.Second
+	queryTimeout  = 20 * time.Second
 
-	maxAdjustAttempts  = 12
-	adjustStepFraction = 50
+	maxAdjustAttempts  = 8
+	adjustStepFraction = 50 // ~2%
 )
 
 type utxoEntry struct {
@@ -171,21 +169,20 @@ func adjustShareDown(share uint64) uint64 {
 
 func buildTx(ctx context.Context, socketPath string, magic int, txIn, changeAddr, destAddr string, outs int, share uint64, body string) (string, string, error) {
 	args := []string{"conway", "transaction", "build", "--tx-in", txIn}
-	// Build tx-outs concurrently to reduce arg assembly time.
 	type piece struct{ a []string }
 	ch := make(chan piece, outs)
 	workers := minInt(outs, runtime.NumCPU())
 	var wg sync.WaitGroup
 	wg.Add(workers)
-	idx := make(chan struct{}, outs)
+	n := make(chan struct{}, outs)
 	for i := 0; i < outs; i++ {
-		idx <- struct{}{}
+		n <- struct{}{}
 	}
-	close(idx)
+	close(n)
 	for w := 0; w < workers; w++ {
 		go func() {
 			defer wg.Done()
-			for range idx {
+			for range n {
 				ch <- piece{a: []string{"--tx-out", fmt.Sprintf("%s+%d", destAddr, share)}}
 			}
 		}()
@@ -235,7 +232,7 @@ func submitTx(ctx context.Context, socketPath string, magic int, signedFile stri
 }
 
 func txID(ctx context.Context, signedFile string) (string, error) {
-	tctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	tctx, cancel := context.WithTimeout(ctx, 12*time.Second)
 	defer cancel()
 	stdout, stderr, err := runCmd(tctx, "cardano-cli", "conway", "transaction", "txid",
 		"--tx-file", signedFile,
@@ -246,66 +243,39 @@ func txID(ctx context.Context, signedFile string) (string, error) {
 	return strings.TrimSpace(stdout), nil
 }
 
-func waitForOutputs(ctx context.Context, socketPath string, magic int, addr, txid string, want int) ([]string, error) {
-	deadline := time.Now().Add(waitTotal)
-	var have []string
-	for time.Now().Before(deadline) {
-		m, err := queryAddrUtxos(ctx, socketPath, magic, addr)
-		if err != nil {
-			return nil, err
-		}
-		have = have[:0]
-		for k := range m {
-			if strings.HasPrefix(k, txid+"#") {
-				have = append(have, k)
-			}
-		}
-		if len(have) >= want {
-			// deterministic order by index
-			sort.Slice(have, func(i, j int) bool {
-				ix := strings.Split(strings.TrimPrefix(have[i], txid+"#"), "#")[0]
-				jx := strings.Split(strings.TrimPrefix(have[j], txid+"#"), "#")[0]
-				ii, _ := strconv.Atoi(ix)
-				jj, _ := strconv.Atoi(jx)
-				return ii < jj
-			})
-			return have[:want], nil
-		}
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-time.After(waitStep):
-		}
-	}
-	return nil, fmt.Errorf("timeout waiting for %d outputs of %s", want, txid)
+type childSeed struct {
+	TxIn     string
+	Lovelace uint64
 }
 
-func buildSignSubmitSplit(ctx context.Context, socket, skey string, magic int, seedTxIn, seedAddr, destAddr string, outs int) (txid string, childTxIns []string, err error) {
-	// Determine available lovelace on the seed.
-	// All seeds live at seedAddr; find the specific TXin.
-	m, err := queryAddrUtxos(ctx, socket, magic, seedAddr)
-	if err != nil {
-		return "", nil, err
-	}
-	amt, ok := m[seedTxIn]
-	if !ok {
-		return "", nil, fmt.Errorf("seed %s not found at %s", seedTxIn, seedAddr)
-	}
-	if amt < minOutputLovelace*uint64(outs) {
-		outs = int(amt / minOutputLovelace)
+// Chains immediately: derives child tx-ins from txid and outs.
+func buildSignSubmitSplitFast(
+	ctx context.Context,
+	socket, skey string,
+	magic int,
+	seedTxIn string,
+	seedAmt uint64,
+	seedAddr, destAddr string,
+	outs int,
+	chainUnconfirmed bool,
+) (txid string, kids []childSeed, err error) {
+
+	if seedAmt < minOutputLovelace*uint64(outs) {
+		outs = int(seedAmt / minOutputLovelace)
 		if outs == 0 {
-			return "", nil, fmt.Errorf("seed %s too small (%d)", seedTxIn, amt)
+			return "", nil, fmt.Errorf("seed %s too small (%d)", seedTxIn, seedAmt)
 		}
 	}
-	bodyDir, _ := os.MkdirTemp("", "splitlvl-*")
-	defer os.RemoveAll(bodyDir)
-	body := filepath.Join(bodyDir, "tx.body")
-	signed := filepath.Join(bodyDir, "tx.signed")
+
+	tmpDir, _ := os.MkdirTemp("", "splitlvl-*")
+	defer os.RemoveAll(tmpDir)
+	body := filepath.Join(tmpDir, "tx.body")
+	signed := filepath.Join(tmpDir, "tx.signed")
 
 	feeBuf := estimateFeeBuffer(outs)
 	share := uint64(0)
-	if amt > feeBuf {
-		share = (amt - feeBuf) / uint64(outs)
+	if seedAmt > feeBuf {
+		share = (seedAmt - feeBuf) / uint64(outs)
 	}
 	if share < minOutputLovelace {
 		share = minOutputLovelace
@@ -338,32 +308,74 @@ func buildSignSubmitSplit(ctx context.Context, socket, skey string, magic int, s
 	if err != nil {
 		return "", nil, err
 	}
-	// Collect child TXins if we will split them later (i.e., destAddr == seedAddr).
-	if destAddr == seedAddr {
-		children, err := waitForOutputs(ctx, socket, magic, destAddr, id, outs)
-		if err != nil {
-			return id, nil, err
-		}
+
+	// Derive child tx-ins deterministically: outputs are in the order we set.
+	children := make([]childSeed, 0, outs)
+	for i := 0; i < outs; i++ {
+		children = append(children, childSeed{
+			TxIn:     fmt.Sprintf("%s#%d", id, i),
+			Lovelace: share,
+		})
+	}
+
+	if chainUnconfirmed {
+		// Return immediately. Downstream will chain on mempool deps.
 		return id, children, nil
 	}
-	return id, nil, nil
+
+	// Optional: confirm and sort by index if the user disables chaining.
+	confKids, err := waitForOutputs(ctx, socket, magic, destAddr, id, outs)
+	if err != nil {
+		return id, children, nil // best-effort fallback
+	}
+	sort.SliceStable(confKids, func(i, j int) bool {
+		ii, _ := strconv.Atoi(strings.Split(confKids[i], "#")[1])
+		jj, _ := strconv.Atoi(strings.Split(confKids[j], "#")[1])
+		return ii < jj
+	})
+	for i := range children {
+		children[i].TxIn = confKids[i]
+	}
+	return id, children, nil
+}
+
+func waitForOutputs(ctx context.Context, socketPath string, magic int, addr, txid string, want int) ([]string, error) {
+	deadline := time.Now().Add(2 * time.Minute)
+	var have []string
+	for time.Now().Before(deadline) {
+		m, err := queryAddrUtxos(ctx, socketPath, magic, addr)
+		if err != nil {
+			return nil, err
+		}
+		have = have[:0]
+		for k := range m {
+			if strings.HasPrefix(k, txid+"#") {
+				have = append(have, k)
+			}
+		}
+		if len(have) >= want {
+			return have[:want], nil
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(400 * time.Millisecond):
+		}
+	}
+	return nil, fmt.Errorf("timeout waiting for %d outputs of %s", want, txid)
 }
 
 type levelPlan struct {
-	Levels int
-	Cap    int
-	// For intermediate levels: fixed branching.
-	Branch []int
-	// For final level: per-seed fanout counts.
+	Levels       int
+	Cap          int
+	Branch       []int
 	FinalPerSeed []int
 }
 
-// planBalanced chooses L and branching near N^(1/L) with per-tx cap.
 func planBalanced(N, cap int) levelPlan {
 	if N <= cap {
-		return levelPlan{Levels: 1, Cap: cap, Branch: nil, FinalPerSeed: []int{N}}
+		return levelPlan{Levels: 1, Cap: cap, FinalPerSeed: []int{N}}
 	}
-	// Find smallest L with b^L >= N where b = min(cap, ceil(N^(1/L))).
 	L := 1
 	for {
 		L++
@@ -387,9 +399,7 @@ func planBalanced(N, cap int) levelPlan {
 	q := N / seeds
 	r := N % seeds
 	if q == 0 {
-		// Too many seeds; reduce last intermediate branching.
-		// Fall back to sequential batches.
-		return levelPlan{Levels: 1, Cap: cap, Branch: nil, FinalPerSeed: []int{N}}
+		return levelPlan{Levels: 1, Cap: cap, FinalPerSeed: []int{N}}
 	}
 	final := make([]int, seeds)
 	for i := 0; i < seeds; i++ {
@@ -406,11 +416,11 @@ func planBalanced(N, cap int) levelPlan {
 }
 
 func intPow(a, b int) int {
-	res := 1
+	r := 1
 	for i := 0; i < b; i++ {
-		res *= a
+		r *= a
 	}
-	return res
+	return r
 }
 
 func workerPool[T any, R any](ctx context.Context, items []T, limit int, fn func(context.Context, int, T) (R, error)) ([]R, error) {
@@ -445,8 +455,8 @@ func workerPool[T any, R any](ctx context.Context, items []T, limit int, fn func
 	return out, nil
 }
 
-// SplitEqualPlanned executes the multi-level plan with per-level parallelism.
-func SplitEqualPlanned(ctx context.Context, socketPath string, magic int, skeyFile, inputAddrFile, outputAddrFile string, splits, cap, threads int) error {
+// SplitEqualPlanned runs multi-level fan-out with optional unconfirmed chaining.
+func SplitEqualPlanned(ctx context.Context, socketPath string, magic int, skeyFile, inputAddrFile, outputAddrFile string, splits, cap, threads int, chainUnconfirmed bool) error {
 	if splits <= 0 {
 		return errors.New("splits must be > 0")
 	}
@@ -467,40 +477,43 @@ func SplitEqualPlanned(ctx context.Context, socketPath string, magic int, skeyFi
 	plan := planBalanced(splits, cap)
 	fmt.Printf("plan: levels=%d branch=%v finalSeeds=%d\n", plan.Levels, plan.Branch, len(plan.FinalPerSeed))
 
-	// Gather seeds per level. Level 0 starts with the original seed.
-	seeds := []string{seed.TxIn}
+	// Level 0 seed list with known amounts.
+	type seedAmt struct {
+		TxIn string
+		Amt  uint64
+	}
+	seeds := []seedAmt{{TxIn: seed.TxIn, Amt: seed.Lovelace}}
 
-	// Intermediate levels
+	// Intermediate levels: outputs return to inAddr; amounts are known.
 	for lvl := 0; lvl < plan.Levels-1; lvl++ {
 		b := plan.Branch[lvl]
 		fmt.Printf("level %d: seeds=%d -> fanout=%d each -> nextSeeds=%d\n", lvl+1, len(seeds), b, len(seeds)*b)
 
-		type job struct {
-			TxIn string
-		}
+		type job struct{ s seedAmt }
 		jobs := make([]job, len(seeds))
-		for i, s := range seeds {
-			jobs[i] = job{TxIn: s}
+		for i := range seeds {
+			jobs[i] = job{s: seeds[i]}
 		}
-		type out struct{ children []string }
+		type out struct{ kids []childSeed }
 		res, err := workerPool(ctx, jobs, threads, func(c context.Context, _ int, j job) (out, error) {
-			_, kids, e := buildSignSubmitSplit(c, socketPath, skeyFile, magic, j.TxIn, inAddr, inAddr, b)
-			return out{children: kids}, e
+			_, kids, e := buildSignSubmitSplitFast(c, socketPath, skeyFile, magic, j.s.TxIn, j.s.Amt, inAddr, inAddr, b, chainUnconfirmed)
+			return out{kids: kids}, e
 		})
 		if err != nil {
 			return fmt.Errorf("level %d failed: %w", lvl+1, err)
 		}
-		next := make([]string, 0, len(seeds)*b)
+		next := make([]seedAmt, 0, len(seeds)*b)
 		for _, r := range res {
-			next = append(next, r.children...)
+			for _, k := range r.kids {
+				next = append(next, seedAmt{TxIn: k.TxIn, Amt: k.Lovelace})
+			}
 		}
 		seeds = next
 	}
 
-	// Final level: distribute target counts across seeds.
+	// Final level: send to outAddr.
 	if plan.Levels == 1 {
-		// Single transaction path.
-		_, _, err := buildSignSubmitSplit(ctx, socketPath, skeyFile, magic, seeds[0], inAddr, outAddr, splits)
+		_, _, err := buildSignSubmitSplitFast(ctx, socketPath, skeyFile, magic, seeds[0].TxIn, seeds[0].Amt, inAddr, outAddr, splits, chainUnconfirmed)
 		return err
 	}
 	fmt.Printf("final level: seeds=%d, total leaves=%d\n", len(seeds), splits)
@@ -509,15 +522,15 @@ func SplitEqualPlanned(ctx context.Context, socketPath string, magic int, skeyFi
 	}
 
 	type fjob struct {
-		TxIn string
-		N    int
+		s seedAmt
+		N int
 	}
 	fjobs := make([]fjob, len(seeds))
 	for i := range seeds {
-		fjobs[i] = fjob{TxIn: seeds[i], N: plan.FinalPerSeed[i]}
+		fjobs[i] = fjob{s: seeds[i], N: plan.FinalPerSeed[i]}
 	}
 	_, err = workerPool(ctx, fjobs, threads, func(c context.Context, _ int, j fjob) (struct{}, error) {
-		_, _, e := buildSignSubmitSplit(c, socketPath, skeyFile, magic, j.TxIn, inAddr, outAddr, j.N)
+		_, _, e := buildSignSubmitSplitFast(c, socketPath, skeyFile, magic, j.s.TxIn, j.s.Amt, inAddr, outAddr, j.N, chainUnconfirmed)
 		return struct{}{}, e
 	})
 	return err
