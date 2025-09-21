@@ -12,3 +12,4 @@ wallet/
 **/prepared_transactions/*
 **/fanout_work/*
 **/venv/*
+cardano_out/
