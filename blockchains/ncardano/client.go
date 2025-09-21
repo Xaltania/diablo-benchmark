@@ -223,7 +223,7 @@ func (bs *blockSubscriber) handleRollback(
 }
 
 func NewBlockchainClient(logger core.Logger, socketPath string) (*BlockchainClient, error) {
-	conn, err := net.Dial("unix", socketPath)
+	conn, err := net.Dial("tcp", socketPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to Cardano node: %w", err)
 	}

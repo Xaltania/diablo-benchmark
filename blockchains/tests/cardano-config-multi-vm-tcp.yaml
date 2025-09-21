@@ -1,0 +1,15 @@
+interface: "cardano"
+
+parameters:
+  redundancy: 1
+
+endpoints:
+- addresses:
+  - /tmp/testnet/pool/node.socket
+  - 10.20.1.1:3333
+  - 10.20.1.2:3333
+  - 10.20.1.3:3333
+  - 10.20.1.4:3333
+  tags:
+    - 127.0.0.1
+  
