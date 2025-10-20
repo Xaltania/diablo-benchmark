@@ -3,13 +3,12 @@ package ncardano
 import (
 	"context"
 	"diablo-benchmark/core"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"os"
 	"strings"
 	"sync"
-
-	"encoding/hex"
 
 	ouroboros "github.com/blinklabs-io/gouroboros"
 	"github.com/blinklabs-io/gouroboros/ledger"
@@ -32,7 +31,7 @@ type BlockchainClient struct {
 type transactionConfirmer interface {
 	prepare(core.Interaction, string) (transactionConfirmerHandle, error)
 	remove(string)
-	reportTransaction(string)
+	reportTransaction(string, uint64, string)
 }
 
 type confirmResult struct {
@@ -47,8 +46,15 @@ type transactionConfirmerHandle interface {
 type cardanoTransactionConfirmer struct {
 	logger    core.Logger
 	pendings  map[string]*cardanoTransactionConfirmerPending
-	committed map[string]struct{}
+	committed map[string]*committedTransaction
+	invalidated map[string]bool // Track transactions invalidated by rollbacks
 	lock      sync.Mutex
+}
+
+type committedTransaction struct {
+	interaction core.Interaction
+	blockSlot   uint64
+	blockHash   string
 }
 
 type cardanoTransactionConfirmerPending struct {
@@ -68,7 +74,8 @@ func newCardanoTransactionConfirmer(logger core.Logger) *cardanoTransactionConfi
 	return &cardanoTransactionConfirmer{
 		logger:    logger,
 		pendings:  make(map[string]*cardanoTransactionConfirmerPending),
-		committed: make(map[string]struct{}),
+		committed: make(map[string]*committedTransaction),
+		invalidated: make(map[string]bool),
 	}
 }
 
@@ -117,7 +124,7 @@ func (p *cardanoTransactionConfirmerPending) confirm() confirmResult {
 	return result
 }
 
-func (c *cardanoTransactionConfirmer) reportTransaction(txHash string) {
+func (c *cardanoTransactionConfirmer) reportTransaction(txHash string, blockSlot uint64, blockHash string) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -127,12 +134,56 @@ func (c *cardanoTransactionConfirmer) reportTransaction(txHash string) {
 		pending.iact.ReportCommit()
 		pending.channel <- confirmResult{false, nil}
 		close(pending.channel)
+		
+		// Store committed transaction with block info
+		c.committed[txHash] = &committedTransaction{
+			interaction: pending.iact,
+			blockSlot:   blockSlot,
+			blockHash:   blockHash,
+		}
 		return
 	}
 
 	// If not in pending, add to committed for future reference
-	c.committed[txHash] = struct{}{}
-	c.logger.Tracef("Transaction %s already committed", txHash)
+	c.committed[txHash] = &committedTransaction{
+		interaction: nil, // We don't have the interaction reference
+		blockSlot:   blockSlot,
+		blockHash:   blockHash,
+	}
+	c.logger.Tracef("Transaction %s already committed in block %d", txHash, blockSlot)
+}
+
+func (c *cardanoTransactionConfirmer) handleRollback(rollbackSlot uint64) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	
+	invalidatedCount := 0
+	var invalidatedTxs []string
+	
+	// Check all committed transactions to see if they were in rolled-back blocks
+	for txHash, committedTx := range c.committed {
+		if committedTx.blockSlot >= rollbackSlot {
+			// This transaction was in a block that was rolled back
+			invalidatedCount++
+			invalidatedTxs = append(invalidatedTxs, txHash)
+			
+			// If we have the interaction reference, we can report an error
+			if committedTx.interaction != nil {
+				// Note: We can't directly set HasError here since we don't have access to the runtime
+				// But we can log a warning and the transaction will be marked as failed
+				c.logger.Warnf("Transaction %s was in rolled-back block %d (rollback to slot %d)", 
+					txHash, committedTx.blockSlot, rollbackSlot)
+			}
+			
+			// Mark as invalidated and remove from committed
+			c.invalidated[txHash] = true
+			delete(c.committed, txHash)
+		}
+	}
+	
+	if invalidatedCount > 0 {
+		c.logger.Warnf("Chain rollback invalidated %d transactions: %v", invalidatedCount, invalidatedTxs)
+	}
 }
 
 func newBlockSubscriber(logger core.Logger, conn *ouroboros.Connection, confirmer transactionConfirmer) *blockSubscriber {
@@ -204,10 +255,13 @@ func (bs *blockSubscriber) handleNewBlock(
 	}
 
 	// Process each transaction in the block
+	blockSlot := block.SlotNumber()
+	blockHash := hex.EncodeToString(block.Hash().Bytes())
+	
 	for _, tx := range transactions {
 		txHash := tx.Hash().String()
-		bs.logger.Tracef("Found transaction in block: %s", txHash)
-		bs.confirmer.reportTransaction(txHash)
+		bs.logger.Tracef("Found transaction %s in block %d (%s)", txHash, blockSlot, blockHash)
+		bs.confirmer.reportTransaction(txHash, blockSlot, blockHash)
 	}
 
 	return nil
@@ -219,6 +273,11 @@ func (bs *blockSubscriber) handleRollback(
 	tip chainsync.Tip,
 ) error {
 	bs.logger.Warnf("Chain reorganisation detected - rolling back to slot %d", point.Slot)
+	
+	// Get the confirmer to check for invalidated transactions
+	confirmer := bs.confirmer.(*cardanoTransactionConfirmer)
+	confirmer.handleRollback(point.Slot)
+	
 	return nil
 }
 
@@ -340,13 +399,20 @@ func (c *BlockchainClient) TriggerInteraction(iact core.Interaction) error {
 	txHash := tx.Hash().String()
 	c.logger.Tracef("Processing transaction with hash: %s", txHash)
 
-	// Check if transaction is already committed
+	// Check if transaction is already committed or was invalidated
 	c.confirmer.(*cardanoTransactionConfirmer).lock.Lock()
 	if _, ok := c.confirmer.(*cardanoTransactionConfirmer).committed[txHash]; ok {
 		delete(c.confirmer.(*cardanoTransactionConfirmer).committed, txHash)
 		c.confirmer.(*cardanoTransactionConfirmer).lock.Unlock()
 		iact.ReportCommit()
 		return nil
+	}
+	
+	// Check if transaction was invalidated by a rollback
+	if invalidated, ok := c.confirmer.(*cardanoTransactionConfirmer).invalidated[txHash]; ok && invalidated {
+		c.confirmer.(*cardanoTransactionConfirmer).lock.Unlock()
+		c.logger.Warnf("Transaction %s was invalidated by chain rollback", txHash)
+		return fmt.Errorf("transaction %s was invalidated by chain rollback", txHash)
 	}
 	c.confirmer.(*cardanoTransactionConfirmer).lock.Unlock()
 
