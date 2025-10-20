@@ -1,3 +1,4 @@
+// split.go
 package main
 
 import (
@@ -20,17 +21,18 @@ import (
 
 const (
 	minOutputLovelace = uint64(1_000_000)
+	feeBaseEstimate   = uint64(600_000)
+	feePerOutEst      = uint64(60_000)
 
-	feeBaseEstimate = uint64(600_000)
-	feePerOutEst    = uint64(60_000)
+	buildTimeout  = 2 * time.Minute
+	signTimeout   = 1 * time.Minute
+	submitTimeout = 30 * time.Second
+	queryTimeout  = 30 * time.Second
+	waitStep      = 1 * time.Second
+	waitTotal     = 180 * time.Second
 
-	buildTimeout  = 90 * time.Second
-	signTimeout   = 45 * time.Second
-	submitTimeout = 20 * time.Second
-	queryTimeout  = 20 * time.Second
-
-	maxAdjustAttempts  = 8
-	adjustStepFraction = 50 // ~2%
+	maxAdjustAttempts  = 12
+	adjustStepFraction = 50
 )
 
 type utxoEntry struct {
@@ -144,9 +146,7 @@ func queryLargestAdaOnlyUTxO(ctx context.Context, socketPath string, magic int, 
 	return best, nil
 }
 
-func estimateFeeBuffer(outs int) uint64 {
-	return feeBaseEstimate + feePerOutEst*uint64(outs)
-}
+func estimateFeeBuffer(outs int) uint64 { return feeBaseEstimate + feePerOutEst*uint64(outs) }
 
 func containsValueNotConserved(stderr string) bool {
 	s := strings.ToLower(stderr)
@@ -174,15 +174,15 @@ func buildTx(ctx context.Context, socketPath string, magic int, txIn, changeAddr
 	workers := minInt(outs, runtime.NumCPU())
 	var wg sync.WaitGroup
 	wg.Add(workers)
-	n := make(chan struct{}, outs)
+	idx := make(chan struct{}, outs)
 	for i := 0; i < outs; i++ {
-		n <- struct{}{}
+		idx <- struct{}{}
 	}
-	close(n)
+	close(idx)
 	for w := 0; w < workers; w++ {
 		go func() {
 			defer wg.Done()
-			for range n {
+			for range idx {
 				ch <- piece{a: []string{"--tx-out", fmt.Sprintf("%s+%d", destAddr, share)}}
 			}
 		}()
@@ -232,50 +232,70 @@ func submitTx(ctx context.Context, socketPath string, magic int, signedFile stri
 }
 
 func txID(ctx context.Context, signedFile string) (string, error) {
-	tctx, cancel := context.WithTimeout(ctx, 12*time.Second)
+	tctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	stdout, stderr, err := runCmd(tctx, "cardano-cli", "conway", "transaction", "txid",
-		"--tx-file", signedFile,
-	)
+	stdout, stderr, err := runCmd(tctx, "cardano-cli", "conway", "transaction", "txid", "--tx-file", signedFile)
 	if err != nil {
 		return "", fmt.Errorf("txid failed: %v: %s", err, stderr)
 	}
 	return strings.TrimSpace(stdout), nil
 }
 
-type childSeed struct {
-	TxIn     string
-	Lovelace uint64
-}
-
-// Chains immediately: derives child tx-ins from txid and outs.
-func buildSignSubmitSplitFast(
-	ctx context.Context,
-	socket, skey string,
-	magic int,
-	seedTxIn string,
-	seedAmt uint64,
-	seedAddr, destAddr string,
-	outs int,
-	chainUnconfirmed bool,
-) (txid string, kids []childSeed, err error) {
-
-	if seedAmt < minOutputLovelace*uint64(outs) {
-		outs = int(seedAmt / minOutputLovelace)
-		if outs == 0 {
-			return "", nil, fmt.Errorf("seed %s too small (%d)", seedTxIn, seedAmt)
+func waitForOutputs(ctx context.Context, socketPath string, magic int, addr, txid string, want int) ([]string, error) {
+	deadline := time.Now().Add(waitTotal)
+	var have []string
+	for time.Now().Before(deadline) {
+		m, err := queryAddrUtxos(ctx, socketPath, magic, addr)
+		if err != nil {
+			return nil, err
+		}
+		have = have[:0]
+		for k := range m {
+			if strings.HasPrefix(k, txid+"#") {
+				have = append(have, k)
+			}
+		}
+		if len(have) >= want {
+			sort.Slice(have, func(i, j int) bool {
+				ii, _ := strconv.Atoi(strings.Split(strings.TrimPrefix(have[i], txid+"#"), "#")[0])
+				jj, _ := strconv.Atoi(strings.Split(strings.TrimPrefix(have[j], txid+"#"), "#")[0])
+				return ii < jj
+			})
+			return have[:want], nil
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(waitStep):
 		}
 	}
+	return nil, fmt.Errorf("timeout waiting for %d outputs of %s", want, txid)
+}
 
-	tmpDir, _ := os.MkdirTemp("", "splitlvl-*")
-	defer os.RemoveAll(tmpDir)
-	body := filepath.Join(tmpDir, "tx.body")
-	signed := filepath.Join(tmpDir, "tx.signed")
+func buildSignSubmitSplit(ctx context.Context, socket, skey string, magic int, seedTxIn, seedAddr, destAddr string, outs int, collectChildren bool) (txid string, childTxIns []string, err error) {
+	m, err := queryAddrUtxos(ctx, socket, magic, seedAddr)
+	if err != nil {
+		return "", nil, err
+	}
+	amt, ok := m[seedTxIn]
+	if !ok {
+		return "", nil, fmt.Errorf("seed %s not found at %s", seedTxIn, seedAddr)
+	}
+	if amt < minOutputLovelace*uint64(outs) {
+		outs = int(amt / minOutputLovelace)
+		if outs == 0 {
+			return "", nil, fmt.Errorf("seed %s too small (%d)", seedTxIn, amt)
+		}
+	}
+	bodyDir, _ := os.MkdirTemp("", "splitlvl-*")
+	defer os.RemoveAll(bodyDir)
+	body := filepath.Join(bodyDir, "tx.body")
+	signed := filepath.Join(bodyDir, "tx.signed")
 
 	feeBuf := estimateFeeBuffer(outs)
 	share := uint64(0)
-	if seedAmt > feeBuf {
-		share = (seedAmt - feeBuf) / uint64(outs)
+	if amt > feeBuf {
+		share = (amt - feeBuf) / uint64(outs)
 	}
 	if share < minOutputLovelace {
 		share = minOutputLovelace
@@ -309,60 +329,14 @@ func buildSignSubmitSplitFast(
 		return "", nil, err
 	}
 
-	// Derive child tx-ins deterministically: outputs are in the order we set.
-	children := make([]childSeed, 0, outs)
-	for i := 0; i < outs; i++ {
-		children = append(children, childSeed{
-			TxIn:     fmt.Sprintf("%s#%d", id, i),
-			Lovelace: share,
-		})
-	}
-
-	if chainUnconfirmed {
-		// Return immediately. Downstream will chain on mempool deps.
+	if collectChildren {
+		children, err := waitForOutputs(ctx, socket, magic, destAddr, id, outs)
+		if err != nil {
+			return id, nil, err
+		}
 		return id, children, nil
 	}
-
-	// Optional: confirm and sort by index if the user disables chaining.
-	confKids, err := waitForOutputs(ctx, socket, magic, destAddr, id, outs)
-	if err != nil {
-		return id, children, nil // best-effort fallback
-	}
-	sort.SliceStable(confKids, func(i, j int) bool {
-		ii, _ := strconv.Atoi(strings.Split(confKids[i], "#")[1])
-		jj, _ := strconv.Atoi(strings.Split(confKids[j], "#")[1])
-		return ii < jj
-	})
-	for i := range children {
-		children[i].TxIn = confKids[i]
-	}
-	return id, children, nil
-}
-
-func waitForOutputs(ctx context.Context, socketPath string, magic int, addr, txid string, want int) ([]string, error) {
-	deadline := time.Now().Add(2 * time.Minute)
-	var have []string
-	for time.Now().Before(deadline) {
-		m, err := queryAddrUtxos(ctx, socketPath, magic, addr)
-		if err != nil {
-			return nil, err
-		}
-		have = have[:0]
-		for k := range m {
-			if strings.HasPrefix(k, txid+"#") {
-				have = append(have, k)
-			}
-		}
-		if len(have) >= want {
-			return have[:want], nil
-		}
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-time.After(400 * time.Millisecond):
-		}
-	}
-	return nil, fmt.Errorf("timeout waiting for %d outputs of %s", want, txid)
+	return id, nil, nil
 }
 
 type levelPlan struct {
@@ -416,11 +390,11 @@ func planBalanced(N, cap int) levelPlan {
 }
 
 func intPow(a, b int) int {
-	r := 1
+	res := 1
 	for i := 0; i < b; i++ {
-		r *= a
+		res *= a
 	}
-	return r
+	return res
 }
 
 func workerPool[T any, R any](ctx context.Context, items []T, limit int, fn func(context.Context, int, T) (R, error)) ([]R, error) {
@@ -455,85 +429,135 @@ func workerPool[T any, R any](ctx context.Context, items []T, limit int, fn func
 	return out, nil
 }
 
-// SplitEqualPlanned runs multi-level fan-out with optional unconfirmed chaining.
-func SplitEqualPlanned(ctx context.Context, socketPath string, magic int, skeyFile, inputAddrFile, outputAddrFile string, splits, cap, threads int, chainUnconfirmed bool) error {
-	if splits <= 0 {
-		return errors.New("splits must be > 0")
-	}
+// SplitEqualPlanned returns all final-level UTxOs and split duration.
+func SplitEqualPlanned(ctx context.Context, socketPath string, magic int, skeyFile, inputAddrFile, outputAddrFile string, splits, cap, threads int) ([]string, time.Duration, error) {
+	start := time.Now()
+
 	inAddr, err := readAddressFile(inputAddrFile)
 	if err != nil {
-		return fmt.Errorf("input address: %w", err)
+		return nil, 0, fmt.Errorf("input address: %w", err)
 	}
 	outAddr, err := readAddressFile(outputAddrFile)
 	if err != nil {
-		return fmt.Errorf("output address: %w", err)
+		return nil, 0, fmt.Errorf("output address: %w", err)
 	}
 
 	seed, err := queryLargestAdaOnlyUTxO(ctx, socketPath, magic, inAddr)
 	if err != nil {
-		return err
+		return nil, 0, err
 	}
 
 	plan := planBalanced(splits, cap)
 	fmt.Printf("plan: levels=%d branch=%v finalSeeds=%d\n", plan.Levels, plan.Branch, len(plan.FinalPerSeed))
 
-	// Level 0 seed list with known amounts.
-	type seedAmt struct {
-		TxIn string
-		Amt  uint64
-	}
-	seeds := []seedAmt{{TxIn: seed.TxIn, Amt: seed.Lovelace}}
+	seeds := []string{seed.TxIn}
 
-	// Intermediate levels: outputs return to inAddr; amounts are known.
 	for lvl := 0; lvl < plan.Levels-1; lvl++ {
 		b := plan.Branch[lvl]
 		fmt.Printf("level %d: seeds=%d -> fanout=%d each -> nextSeeds=%d\n", lvl+1, len(seeds), b, len(seeds)*b)
 
-		type job struct{ s seedAmt }
+		type job struct{ TxIn string }
 		jobs := make([]job, len(seeds))
-		for i := range seeds {
-			jobs[i] = job{s: seeds[i]}
+		for i, s := range seeds {
+			jobs[i] = job{TxIn: s}
 		}
-		type out struct{ kids []childSeed }
-		res, err := workerPool(ctx, jobs, threads, func(c context.Context, _ int, j job) (out, error) {
-			_, kids, e := buildSignSubmitSplitFast(c, socketPath, skeyFile, magic, j.s.TxIn, j.s.Amt, inAddr, inAddr, b, chainUnconfirmed)
-			return out{kids: kids}, e
+		type outKids struct{ children []string }
+		res, err := workerPool(ctx, jobs, threads, func(c context.Context, _ int, j job) (outKids, error) {
+			_, kids, e := buildSignSubmitSplit(c, socketPath, skeyFile, magic, j.TxIn, inAddr, inAddr, b, true)
+			return outKids{children: kids}, e
 		})
 		if err != nil {
-			return fmt.Errorf("level %d failed: %w", lvl+1, err)
+			return nil, 0, fmt.Errorf("level %d failed: %w", lvl+1, err)
 		}
-		next := make([]seedAmt, 0, len(seeds)*b)
+		next := make([]string, 0, len(seeds)*b)
 		for _, r := range res {
-			for _, k := range r.kids {
-				next = append(next, seedAmt{TxIn: k.TxIn, Amt: k.Lovelace})
-			}
+			next = append(next, r.children...)
 		}
 		seeds = next
 	}
 
-	// Final level: send to outAddr.
+	var finals []string
 	if plan.Levels == 1 {
-		_, _, err := buildSignSubmitSplitFast(ctx, socketPath, skeyFile, magic, seeds[0].TxIn, seeds[0].Amt, inAddr, outAddr, splits, chainUnconfirmed)
-		return err
-	}
-	fmt.Printf("final level: seeds=%d, total leaves=%d\n", len(seeds), splits)
-	if len(seeds) != len(plan.FinalPerSeed) {
-		return fmt.Errorf("internal plan mismatch: have %d seeds, planned %d", len(seeds), len(plan.FinalPerSeed))
+		_, kids, err := buildSignSubmitSplit(ctx, socketPath, skeyFile, magic, seeds[0], inAddr, outAddr, splits, true)
+		if err != nil {
+			return nil, 0, err
+		}
+		finals = kids
+	} else {
+		type fjob struct {
+			TxIn string
+			N    int
+		}
+		fjobs := make([]fjob, len(seeds))
+		for i := range seeds {
+			fjobs[i] = fjob{TxIn: seeds[i], N: plan.FinalPerSeed[i]}
+		}
+		type kid struct{ outs []string }
+		res, err := workerPool(ctx, fjobs, threads, func(c context.Context, _ int, j fjob) (kid, error) {
+			_, outs, e := buildSignSubmitSplit(c, socketPath, skeyFile, magic, j.TxIn, inAddr, outAddr, j.N, true)
+			return kid{outs: outs}, e
+		})
+		if err != nil {
+			return nil, 0, err
+		}
+		for _, r := range res {
+			finals = append(finals, r.outs...)
+		}
 	}
 
-	type fjob struct {
-		s seedAmt
-		N int
+	splitDur := time.Since(start)
+	return finals, splitDur, nil
+}
+
+// Build+sign only. No submit. Writes into outDir.
+func selfSpendBuildSign(ctx context.Context, socketPath string, magic int, skeyFile, addr, txin, outDir string) (string, string, error) {
+	base := strings.ReplaceAll(txin, "#", "_")
+	body := filepath.Join(outDir, base+".body")
+	signed := filepath.Join(outDir, base+".signed")
+
+	bctx, cancel := context.WithTimeout(ctx, buildTimeout)
+	defer cancel()
+	_, stderr, err := runCmd(bctx, "cardano-cli", "conway", "transaction", "build",
+		"--tx-in", txin,
+		"--change-address", addr,
+		"--testnet-magic", strconv.Itoa(magic),
+		"--socket-path", socketPath,
+		"--out-file", body,
+	)
+	if err != nil {
+		return "", "", fmt.Errorf("self-spend build failed: %v: %s", err, stderr)
 	}
-	fjobs := make([]fjob, len(seeds))
-	for i := range seeds {
-		fjobs[i] = fjob{s: seeds[i], N: plan.FinalPerSeed[i]}
+	if err := signTx(ctx, magic, skeyFile, body, signed); err != nil {
+		return "", "", err
 	}
-	_, err = workerPool(ctx, fjobs, threads, func(c context.Context, _ int, j fjob) (struct{}, error) {
-		_, _, e := buildSignSubmitSplitFast(c, socketPath, skeyFile, magic, j.s.TxIn, j.s.Amt, inAddr, outAddr, j.N, chainUnconfirmed)
+
+	// Compute and persist txid so it’s available for your benchmark tooling.
+	if id, err := txID(ctx, signed); err == nil {
+		_ = os.WriteFile(filepath.Join(outDir, base+".txid"), []byte(id+"\n"), 0o644)
+	}
+
+	return body, signed, nil
+}
+
+// PrepareSelfSpends creates a temp dir, builds+signs all self-spends there, returns dir and duration.
+func PrepareSelfSpends(ctx context.Context, socketPath string, magic int, skeyFile, outputAddr string, utxos []string, threads int) (string, time.Duration, error) {
+	outDir, err := os.MkdirTemp("", "selfspends-*")
+	if err != nil {
+		return "", 0, err
+	}
+
+	start := time.Now()
+	type job struct{ TxIn string }
+	jobs := make([]job, len(utxos))
+	for i := range utxos {
+		jobs[i] = job{TxIn: utxos[i]}
+	}
+
+	_, err = workerPool(ctx, jobs, threads, func(c context.Context, _ int, j job) (struct{}, error) {
+		_, _, e := selfSpendBuildSign(c, socketPath, magic, skeyFile, outputAddr, j.TxIn, outDir)
 		return struct{}{}, e
 	})
-	return err
+	return outDir, time.Since(start), err
 }
 
 func minInt(a, b int) int {

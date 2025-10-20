@@ -3,7 +3,11 @@ package ncardano
 import (
 	"diablo-benchmark/core"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 type BlockchainInterface struct {
@@ -42,6 +46,17 @@ func (this *BlockchainInterface) Builder(params map[string]string, env []string,
 			for _, value = range values {
 				logger.Debugf("with contracts from '%s'", value)
 				// TODO: Implement contract loading
+			}
+			continue
+		}
+
+		if key == "tx_prepare_config" {
+			for _, value = range values {
+				logger.Debugf("with transaction preparation config from '%s'", value)
+				err := builder.loadTxPrepareConfig(value)
+				if err != nil {
+					return nil, fmt.Errorf("failed to load transaction preparation config from '%s': %w", value, err)
+				}
 			}
 			continue
 		}
@@ -110,4 +125,16 @@ func parseEnvmap(env []string) (map[string][]string, error) {
 	}
 
 	return ret, nil
+}
+
+// TxPrepareConfig represents transaction preparation configuration
+type TxPrepareConfig struct {
+	Splits         int    `yaml:"splits"`         // Total outputs to produce
+	CapPerTx       int    `yaml:"cap_per_tx"`     // Max outputs per transaction
+	Threads        int    `yaml:"threads"`        // Parallel workers per level
+	InputAddrFile  string `yaml:"input_addr_file"`  // Input address file
+	OutputAddrFile string `yaml:"output_addr_file"` // Output address file
+	SkeyFile       string `yaml:"skey_file"`      // Signing key file
+	FinalSkeyFile  string `yaml:"final_skey_file,omitempty"` // Final signing key file (optional)
+	SkipPrepare    bool   `yaml:"skip_prepare"`   // Skip building final self-spend transactions
 }

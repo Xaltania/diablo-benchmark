@@ -7,8 +7,10 @@ import (
 	"diablo-benchmark/util"
 	"encoding/binary"
 	"fmt"
+	"os"
 
 	"github.com/blinklabs-io/gouroboros/ledger/common"
+	"gopkg.in/yaml.v3"
 )
 
 func ctxErr(ctx context.Context) error {
@@ -24,6 +26,7 @@ type BlockchainBuilder struct {
 	logger       core.Logger
 	nextAccount  int
 	nextContract int
+	txPrepareConfig *TxPrepareConfig
 }
 
 func newBuilder(logger core.Logger) *BlockchainBuilder {
@@ -31,6 +34,7 @@ func newBuilder(logger core.Logger) *BlockchainBuilder {
 		logger:       logger,
 		nextAccount:  0,
 		nextContract: 0,
+		txPrepareConfig: nil,
 	}
 }
 
@@ -102,4 +106,56 @@ func (b *BlockchainBuilder) EncodeInvoke(from, contract interface{}, function st
 
 func (b *BlockchainBuilder) EncodeInteraction(itype string, expr core.BenchmarkExpression, info core.InteractionInfo) ([]byte, error) {
 	return nil, fmt.Errorf("unknown interaction type '%s'", itype)
+}
+
+// loadTxPrepareConfig loads transaction preparation configuration from a YAML file
+func (b *BlockchainBuilder) loadTxPrepareConfig(configPath string) error {
+	// Read the YAML file
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to read config file '%s': %w", configPath, err)
+	}
+
+	// Parse the YAML
+	var config TxPrepareConfig
+	err = yaml.Unmarshal(data, &config)
+	if err != nil {
+		return fmt.Errorf("failed to parse YAML config file '%s': %w", configPath, err)
+	}
+
+	// Validate the configuration
+	if config.Splits <= 0 {
+		return fmt.Errorf("splits must be greater than 0, got %d", config.Splits)
+	}
+	if config.CapPerTx <= 0 {
+		return fmt.Errorf("cap_per_tx must be greater than 0, got %d", config.CapPerTx)
+	}
+	if config.Threads <= 0 {
+		return fmt.Errorf("threads must be greater than 0, got %d", config.Threads)
+	}
+	if config.InputAddrFile == "" {
+		return fmt.Errorf("input_addr_file is required")
+	}
+	if config.OutputAddrFile == "" {
+		return fmt.Errorf("output_addr_file is required")
+	}
+	if config.SkeyFile == "" {
+		return fmt.Errorf("skey_file is required")
+	}
+
+	// Set default final skey file if not provided
+	if config.FinalSkeyFile == "" {
+		config.FinalSkeyFile = config.SkeyFile
+	}
+
+	b.txPrepareConfig = &config
+	b.logger.Debugf("loaded transaction preparation config: splits=%d, cap_per_tx=%d, threads=%d", 
+		config.Splits, config.CapPerTx, config.Threads)
+	
+	return nil
+}
+
+// GetTxPrepareConfig returns the loaded transaction preparation configuration
+func (b *BlockchainBuilder) GetTxPrepareConfig() *TxPrepareConfig {
+	return b.txPrepareConfig
 }
