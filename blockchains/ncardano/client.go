@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	ouroboros "github.com/blinklabs-io/gouroboros"
 	"github.com/blinklabs-io/gouroboros/ledger"
@@ -16,6 +17,7 @@ import (
 	"github.com/blinklabs-io/gouroboros/protocol/chainsync"
 	"github.com/blinklabs-io/gouroboros/protocol/common"
 	"github.com/blinklabs-io/gouroboros/protocol/localtxsubmission"
+	"github.com/blinklabs-io/gouroboros/protocol/localstatequery"
 )
 
 type BlockchainClient struct {
@@ -26,12 +28,20 @@ type BlockchainClient struct {
 	// provider   parameterProvider
 	confirmer  transactionConfirmer
 	subscriber *blockSubscriber
+	
+	// Finality tracking
+	finalityTime    time.Duration
+	lastConfirmedTx time.Time
+	allTxsSubmitted bool
+	finalityMutex   sync.Mutex
 }
 
 type transactionConfirmer interface {
 	prepare(core.Interaction, string) (transactionConfirmerHandle, error)
 	remove(string)
 	reportTransaction(string, uint64, string)
+	storeTxCBOR(string, []byte)
+	resubmitInvalidatedTx(string, []byte) error
 }
 
 type confirmResult struct {
@@ -48,6 +58,7 @@ type cardanoTransactionConfirmer struct {
 	pendings  map[string]*cardanoTransactionConfirmerPending
 	committed map[string]*committedTransaction
 	invalidated map[string]bool // Track transactions invalidated by rollbacks
+	txCBOR    map[string][]byte // Store original CBOR for resubmission
 	lock      sync.Mutex
 }
 
@@ -55,6 +66,7 @@ type committedTransaction struct {
 	interaction core.Interaction
 	blockSlot   uint64
 	blockHash   string
+	txCBOR      []byte // Store CBOR for potential resubmission
 }
 
 type cardanoTransactionConfirmerPending struct {
@@ -76,6 +88,7 @@ func newCardanoTransactionConfirmer(logger core.Logger) *cardanoTransactionConfi
 		pendings:  make(map[string]*cardanoTransactionConfirmerPending),
 		committed: make(map[string]*committedTransaction),
 		invalidated: make(map[string]bool),
+		txCBOR:    make(map[string][]byte),
 	}
 }
 
@@ -128,6 +141,9 @@ func (c *cardanoTransactionConfirmer) reportTransaction(txHash string, blockSlot
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
+	// Get stored CBOR for this transaction
+	txCBOR := c.txCBOR[txHash]
+
 	// Check if transaction is in pending transactions
 	if pending, ok := c.pendings[txHash]; ok {
 		delete(c.pendings, txHash)
@@ -135,12 +151,17 @@ func (c *cardanoTransactionConfirmer) reportTransaction(txHash string, blockSlot
 		pending.channel <- confirmResult{false, nil}
 		close(pending.channel)
 		
-		// Store committed transaction with block info
+		// Store committed transaction with block info and CBOR
 		c.committed[txHash] = &committedTransaction{
 			interaction: pending.iact,
 			blockSlot:   blockSlot,
 			blockHash:   blockHash,
+			txCBOR:      txCBOR,
 		}
+		
+		// Update last confirmed transaction time (this will be called from the block subscriber)
+		// Note: We need access to the client to update this, but we don't have it here
+		// The client will handle this in TriggerInteraction
 		return
 	}
 
@@ -149,8 +170,29 @@ func (c *cardanoTransactionConfirmer) reportTransaction(txHash string, blockSlot
 		interaction: nil, // We don't have the interaction reference
 		blockSlot:   blockSlot,
 		blockHash:   blockHash,
+		txCBOR:      txCBOR,
 	}
 	c.logger.Tracef("Transaction %s already committed in block %d", txHash, blockSlot)
+}
+
+func (c *cardanoTransactionConfirmer) storeTxCBOR(txHash string, txCBOR []byte) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.txCBOR[txHash] = txCBOR
+}
+
+func (c *cardanoTransactionConfirmer) resubmitInvalidatedTx(txHash string, txCBOR []byte) error {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	
+	// Store the CBOR for potential future resubmission
+	c.txCBOR[txHash] = txCBOR
+	
+	// Mark as invalidated
+	c.invalidated[txHash] = true
+	
+	c.logger.Infof("Transaction %s marked for resubmission due to rollback", txHash)
+	return nil
 }
 
 func (c *cardanoTransactionConfirmer) handleRollback(rollbackSlot uint64) {
@@ -166,6 +208,11 @@ func (c *cardanoTransactionConfirmer) handleRollback(rollbackSlot uint64) {
 			// This transaction was in a block that was rolled back
 			invalidatedCount++
 			invalidatedTxs = append(invalidatedTxs, txHash)
+			
+			// Store CBOR for resubmission if available
+			if len(committedTx.txCBOR) > 0 {
+				c.txCBOR[txHash] = committedTx.txCBOR
+			}
 			
 			// If we have the interaction reference, we can report an error
 			if committedTx.interaction != nil {
@@ -281,6 +328,27 @@ func (bs *blockSubscriber) handleRollback(
 	return nil
 }
 
+// calculateFinalityTime calculates the transaction finality time based on protocol parameters
+func calculateFinalityTime(protocolParams interface{}) time.Duration {
+	// Default values (mainnet-like)
+	activeSlotsCoeff := 0.05
+	slotLength := 20 * time.Second
+	securityParam := uint64(2160)
+	
+	// Try to extract actual values from protocol parameters
+	if _, ok := protocolParams.(*conway.ConwayProtocolParameters); ok {
+		// Note: These fields might not be directly available in the protocol parameters
+		// We'll use defaults for now - in a real implementation, we would extract
+		// activeSlotsCoeff, slotLength, and securityParam from the protocol parameters
+		// For now, we use the default values which are reasonable for mainnet
+	}
+	
+	// Calculate finality time: ((1 / activeSlotsCoeff) * slotLength) * securityParam
+	finalityTime := time.Duration(float64(1.0/activeSlotsCoeff) * float64(slotLength) * float64(securityParam))
+	
+	return finalityTime
+}
+
 func NewBlockchainClient(logger core.Logger, socketPath string) (*BlockchainClient, error) {
 	conn, err := net.Dial("tcp", socketPath)
 	if err != nil {
@@ -308,6 +376,9 @@ func NewBlockchainClient(logger core.Logger, socketPath string) (*BlockchainClie
 		ouroboros.WithLocalTxSubmissionConfig(
 			localtxsubmission.NewConfig(),
 		),
+		ouroboros.WithLocalStateQueryConfig(
+			localstatequery.NewConfig(),
+		),
 	)
 
 	if err != nil {
@@ -315,6 +386,18 @@ func NewBlockchainClient(logger core.Logger, socketPath string) (*BlockchainClie
 	}
 
 	subscriber.conn = oConn
+
+	// Query protocol parameters to calculate finality time
+	logger.Debugf("Querying protocol parameters for finality calculation...")
+	protocolParams, err := oConn.LocalStateQuery().Client.GetCurrentProtocolParams()
+	var finalityTime time.Duration
+	if err != nil {
+		logger.Warnf("Failed to query protocol parameters, using default finality time: %v", err)
+		finalityTime = calculateFinalityTime(nil)
+	} else {
+		finalityTime = calculateFinalityTime(protocolParams)
+		logger.Infof("Calculated finality time: %v", finalityTime)
+	}
 
 	// Start the block subscriber
 	if err := subscriber.start(); err != nil {
@@ -329,13 +412,21 @@ func NewBlockchainClient(logger core.Logger, socketPath string) (*BlockchainClie
 		}
 	}()
 
-	return &BlockchainClient{
+	client := &BlockchainClient{
 		logger:     logger,
 		conn:       oConn,
 		ctx:        context.Background(),
 		confirmer:  confirmer,
 		subscriber: subscriber,
-	}, nil
+		finalityTime: finalityTime,
+		lastConfirmedTx: time.Time{},
+		allTxsSubmitted: false,
+	}
+	
+	// Start the invalidated transaction monitor
+	client.StartInvalidatedTransactionMonitor()
+	
+	return client, nil
 }
 
 func (c *BlockchainClient) DecodePayload(cbor_bytes []byte) (interface{}, error) {
@@ -399,20 +490,57 @@ func (c *BlockchainClient) TriggerInteraction(iact core.Interaction) error {
 	txHash := tx.Hash().String()
 	c.logger.Tracef("Processing transaction with hash: %s", txHash)
 
+	// Store transaction CBOR for potential resubmission
+	c.confirmer.storeTxCBOR(txHash, txBytes)
+
 	// Check if transaction is already committed or was invalidated
 	c.confirmer.(*cardanoTransactionConfirmer).lock.Lock()
 	if _, ok := c.confirmer.(*cardanoTransactionConfirmer).committed[txHash]; ok {
 		delete(c.confirmer.(*cardanoTransactionConfirmer).committed, txHash)
 		c.confirmer.(*cardanoTransactionConfirmer).lock.Unlock()
 		iact.ReportCommit()
+		
+		// Update last confirmed transaction time
+		c.finalityMutex.Lock()
+		c.lastConfirmedTx = time.Now()
+		c.finalityMutex.Unlock()
+		
 		return nil
 	}
 	
 	// Check if transaction was invalidated by a rollback
 	if invalidated, ok := c.confirmer.(*cardanoTransactionConfirmer).invalidated[txHash]; ok && invalidated {
 		c.confirmer.(*cardanoTransactionConfirmer).lock.Unlock()
-		c.logger.Warnf("Transaction %s was invalidated by chain rollback", txHash)
-		return fmt.Errorf("transaction %s was invalidated by chain rollback", txHash)
+		c.logger.Warnf("Transaction %s was invalidated by chain rollback - marking as failed (resubmission disabled)", txHash)
+		
+		// TEMPORARILY DISABLED: Resubmit the transaction immediately
+		// if err := c.resubmitTransaction(txHash, txBytes); err != nil {
+		// 	return fmt.Errorf("failed to resubmit invalidated transaction %s: %w", txHash, err)
+		// }
+		
+		// TEMPORARILY DISABLED: Prepare confirmation for the resubmitted transaction
+		// handle, err := c.confirmer.prepare(iact, txHash)
+		// if err != nil {
+		// 	return err
+		// }
+		
+		// TEMPORARILY DISABLED: Wait for confirmation
+		// result := handle.confirm()
+		// if result.err != nil {
+		// 	return fmt.Errorf("resubmitted transaction %s failed: %w", txHash, result.err)
+		// }
+		// if result.resend {
+		// 	return fmt.Errorf("resubmitted transaction %s needs to be resent", txHash)
+		// }
+		
+		// TEMPORARILY DISABLED: Update last confirmed transaction time
+		// c.finalityMutex.Lock()
+		// c.lastConfirmedTx = time.Now()
+		// c.finalityMutex.Unlock()
+		
+		// Mark as failed instead of resubmitting
+		iact.ReportAbort()
+		return fmt.Errorf("transaction %s was invalidated by chain rollback (resubmission disabled)", txHash)
 	}
 	c.confirmer.(*cardanoTransactionConfirmer).lock.Unlock()
 
@@ -443,5 +571,185 @@ func (c *BlockchainClient) TriggerInteraction(iact core.Interaction) error {
 		return fmt.Errorf("transaction %s needs to be resent", txHash)
 	}
 
+	// Update last confirmed transaction time
+	c.finalityMutex.Lock()
+	c.lastConfirmedTx = time.Now()
+	c.finalityMutex.Unlock()
+
 	return nil
+}
+
+// resubmitTransaction resubmits a transaction that was invalidated by a rollback
+func (c *BlockchainClient) resubmitTransaction(txHash string, txBytes []byte) error {
+	c.logger.Infof("Resubmitting transaction %s (CBOR length: %d bytes)", txHash, len(txBytes))
+	
+	// Submit the transaction again
+	if err := c.conn.LocalTxSubmission().Client.SubmitTx(ledger.TxTypeConway, txBytes); err != nil {
+		// If transaction is already submitted, we can ignore the error
+		if !strings.Contains(err.Error(), "already submitted") {
+			c.logger.Errorf("Failed to resubmit transaction %s: %v", txHash, err)
+			return fmt.Errorf("failed to resubmit transaction: %w", err)
+		}
+		c.logger.Debugf("Transaction %s was already submitted (ignoring error)", txHash)
+	} else {
+		c.logger.Debugf("Successfully resubmitted transaction %s", txHash)
+	}
+	
+	// Clean up transaction state since we're resubmitting
+	confirmer := c.confirmer.(*cardanoTransactionConfirmer)
+	confirmer.lock.Lock()
+	defer confirmer.lock.Unlock()
+	
+	// Remove from invalidated map
+	delete(confirmer.invalidated, txHash)
+	
+	// Remove from committed map if it exists (it shouldn't, but just in case)
+	if _, wasCommitted := confirmer.committed[txHash]; wasCommitted {
+		c.logger.Debugf("Removing transaction %s from committed map during resubmission", txHash)
+		delete(confirmer.committed, txHash)
+	}
+	
+	// Remove from pendings if it exists (it shouldn't, but just in case)
+	if pending, exists := confirmer.pendings[txHash]; exists {
+		c.logger.Debugf("Removing transaction %s from pendings map during resubmission", txHash)
+		delete(confirmer.pendings, txHash)
+		close(pending.channel)
+	}
+	
+	return nil
+}
+
+// WaitForFinality waits for the finality period after the last transaction was confirmed
+func (c *BlockchainClient) WaitForFinality() error {
+	c.finalityMutex.Lock()
+	lastConfirmed := c.lastConfirmedTx
+	allSubmitted := c.allTxsSubmitted
+	c.finalityMutex.Unlock()
+	
+	if lastConfirmed.IsZero() {
+		c.logger.Warnf("No transactions have been confirmed yet")
+		return nil
+	}
+	
+	if !allSubmitted {
+		c.logger.Warnf("Not all transactions have been submitted yet")
+		return nil
+	}
+	
+	// Calculate how long to wait
+	timeSinceLastTx := time.Since(lastConfirmed)
+	remainingTime := c.finalityTime - timeSinceLastTx
+	
+	if remainingTime <= 0 {
+		c.logger.Infof("Finality period has already elapsed since last transaction")
+		return nil
+	}
+	
+	c.logger.Infof("Waiting %v for transaction finality (last tx confirmed %v ago)", remainingTime, timeSinceLastTx)
+	time.Sleep(remainingTime)
+	
+	c.logger.Infof("Finality period completed - all transactions should now be permanently on chain")
+	return nil
+}
+
+// MarkAllTransactionsSubmitted marks that all transactions have been submitted
+func (c *BlockchainClient) MarkAllTransactionsSubmitted() {
+	c.finalityMutex.Lock()
+	defer c.finalityMutex.Unlock()
+	c.allTxsSubmitted = true
+	c.logger.Infof("All transactions have been submitted - finality tracking enabled")
+}
+
+// ResubmitAllInvalidatedTransactions resubmits all transactions that were invalidated by rollbacks
+func (c *BlockchainClient) ResubmitAllInvalidatedTransactions() error {
+	confirmer := c.confirmer.(*cardanoTransactionConfirmer)
+	
+	// Get list of invalidated transactions first
+	confirmer.lock.Lock()
+	invalidatedTxs := make([]string, 0)
+	for txHash, invalidated := range confirmer.invalidated {
+		if invalidated {
+			invalidatedTxs = append(invalidatedTxs, txHash)
+		}
+	}
+	confirmer.lock.Unlock()
+	
+	resubmittedCount := 0
+	for _, txHash := range invalidatedTxs {
+		confirmer.lock.Lock()
+		txCBOR, exists := confirmer.txCBOR[txHash]
+		confirmer.lock.Unlock()
+		
+		if exists {
+			c.logger.Infof("Resubmitting invalidated transaction %s", txHash)
+			if err := c.resubmitTransaction(txHash, txCBOR); err != nil {
+				c.logger.Errorf("Failed to resubmit transaction %s: %v", txHash, err)
+				continue
+			}
+			resubmittedCount++
+		} else {
+			c.logger.Warnf("No CBOR found for invalidated transaction %s", txHash)
+		}
+	}
+	
+	if resubmittedCount > 0 {
+		c.logger.Infof("Resubmitted %d invalidated transactions", resubmittedCount)
+	}
+	
+	return nil
+}
+
+// GetInvalidatedTransactionCount returns the number of transactions that were invalidated by rollbacks
+func (c *BlockchainClient) GetInvalidatedTransactionCount() int {
+	confirmer := c.confirmer.(*cardanoTransactionConfirmer)
+	confirmer.lock.Lock()
+	defer confirmer.lock.Unlock()
+	
+	count := 0
+	for _, invalidated := range confirmer.invalidated {
+		if invalidated {
+			count++
+		}
+	}
+	return count
+}
+
+// StartInvalidatedTransactionMonitor starts a background goroutine that monitors for invalidated transactions
+// and resubmits them automatically
+func (c *BlockchainClient) StartInvalidatedTransactionMonitor() {
+	go func() {
+		ticker := time.NewTicker(5 * time.Second) // Check every 5 seconds
+		defer ticker.Stop()
+		
+		for {
+			select {
+			case <-c.ctx.Done():
+				c.logger.Debugf("Stopping invalidated transaction monitor")
+				return
+			case <-ticker.C:
+				// Check for invalidated transactions and resubmit them
+				if c.GetInvalidatedTransactionCount() > 0 {
+					c.logger.Debugf("Found invalidated transactions (resubmission disabled)")
+					// TEMPORARILY DISABLED: Resubmit invalidated transactions
+					// if err := c.ResubmitAllInvalidatedTransactions(); err != nil {
+					// 	c.logger.Errorf("Error resubmitting invalidated transactions: %v", err)
+					// }
+				}
+			}
+		}
+	}()
+	
+	c.logger.Infof("Started invalidated transaction monitor")
+}
+
+// GetFinalityTime returns the calculated finality time for this client
+func (c *BlockchainClient) GetFinalityTime() time.Duration {
+	return c.finalityTime
+}
+
+// GetLastConfirmedTransactionTime returns the time when the last transaction was confirmed
+func (c *BlockchainClient) GetLastConfirmedTransactionTime() time.Time {
+	c.finalityMutex.Lock()
+	defer c.finalityMutex.Unlock()
+	return c.lastConfirmedTx
 }

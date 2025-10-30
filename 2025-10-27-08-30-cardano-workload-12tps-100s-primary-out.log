@@ -1,0 +1,8 @@
+2025-10-27 10:41:36.008 DEBUG : use master seed: 8642110
+2025-10-27 10:41:36.008 DEBUG : parse setup file 'blockchains/tests/cardano-config-multi-vm-tcp.yaml'
+2025-10-27 10:41:36.008 DEBUG : use interface 'cardano'
+2025-10-27 10:41:36.008 DEBUG builder: new builder
+2025-10-27 10:41:36.008 DEBUG builder: use endpoint '10.20.1.1:3333'
+2025-10-27 10:41:36.008 DEBUG : wait for 1 secondary connections
+2025-10-27 10:41:36.008 DEBUG : listen for 1 secondary connections on 0.0.0.0:5000
+2025-10-27 10:41:36.009 TRACE : wait for connection on 0.0.0.0:5000
