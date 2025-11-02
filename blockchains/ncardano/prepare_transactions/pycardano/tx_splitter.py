@@ -28,12 +28,22 @@ DEF_MAX_OUTS = int(os.getenv("MAX_OUTS_PER_TX", str(DEF_CAP)))
 # ---------- globals set from CLI ----------
 TESTNET_MAGIC: int | None = None
 SOCKET_PATH: str | None = None
+VERBOSE: bool = False
 
 # throttles (set in main)
 BUILD_SEM: Semaphore | None = None
 SUBMIT_SEM: Semaphore | None = None
 
 # ---------- utilities ----------
+def dbg(msg: str):
+    if VERBOSE:
+        try:
+            now = time.strftime("%H:%M:%S")
+            print(f"[{now}] {msg}", file=sys.stderr, flush=True)
+        except Exception:
+            # Best-effort debug printing; never crash on debug output
+            pass
+
 def read_address_from_file(path_like: Path | str) -> str:
     """Read an address file containing either a bech32 string or JSON with 'address'."""
     text = Path(path_like).read_text().strip()
@@ -56,6 +66,7 @@ def sh(args, *, capture=True) -> str:
         raise RuntimeError("Socket path not set")
     env["CARDANO_NODE_SOCKET_PATH"] = SOCKET_PATH
 
+    dbg(f"RUN: {' '.join(args)}")
     for i in range(6):
         try:
             p = subprocess.run(
@@ -66,14 +77,25 @@ def sh(args, *, capture=True) -> str:
                 stderr=subprocess.PIPE,
                 text=True,
             )
-            return (p.stdout or "").strip()
+            out = (p.stdout or "").strip()
+            if VERBOSE:
+                if capture and out:
+                    # Truncate very long outputs
+                    shown = out if len(out) <= 256 else out[:256] + "..."
+                    dbg(f"OK[{i}]: {' '.join(args)} -> {len(out)}B '{shown}'")
+                else:
+                    dbg(f"OK[{i}]: {' '.join(args)}")
+            return out
         except subprocess.CalledProcessError as e:
             msg = (e.stderr or "").strip()
             low = msg.lower()
             transient = ("resource exhausted" in low) or ("temporarily unavailable" in low)
             if transient and i < 5:
-                time.sleep(0.5 * (2 ** i))
+                backoff = 0.5 * (2 ** i)
+                dbg(f"RETRY[{i}]: transient error -> sleeping {backoff:.2f}s; msg='{msg[:180]}'")
+                time.sleep(backoff)
                 continue
+            dbg(f"FAIL: {' '.join(args)} -> {msg[:500]}")
             raise RuntimeError(f"cmd failed: {' '.join(args)}\n{msg}") from e
 
 def cli(args, capture=True) -> str:
@@ -147,8 +169,15 @@ def split_plan(N: int, CAP: int) -> Dict:
 
 # ---------- chain helpers ----------
 def query_utxos(addr: str) -> Dict[str, dict]:
+    dbg(f"query_utxos: addr={addr[:16]}...")
     raw = cli(["query", "utxo", "--address", addr, "--output-json"])
-    return json.loads(raw or "{}")
+    try:
+        data = json.loads(raw or "{}")
+    except Exception as e:
+        dbg(f"query_utxos: JSON parse error: {e}; raw_len={len(raw) if raw else 0}")
+        data = {}
+    dbg(f"query_utxos: keys={len(data)}")
+    return data
 
 def utxo_keys(addr: str) -> List[str]:
     u = query_utxos(addr)
@@ -171,27 +200,47 @@ def wait_blocks(n: int = 2):
         tip = json.loads(cli(["query", "tip"]))
         return int(tip.get("slot", tip.get("slotNo", 0)))
     s0 = slot()
+    dbg(f"wait_blocks: waiting for {n} slots from {s0}")
+    last_log = time.time()
     while True:
         time.sleep(1)
-        if slot() - s0 >= n:
+        s = slot()
+        if s - s0 >= n:
+            dbg(f"wait_blocks: done at slot {s}")
             return
+        if VERBOSE and (time.time() - last_log) >= 5:
+            dbg(f"wait_blocks: at {s}, need {n - (s - s0)} more")
+            last_log = time.time()
 
 def wait_for_txin(addr: str, txin: str):
+    dbg(f"wait_for_txin: addr={addr[:16]}..., txin={txin}")
+    last_log = time.time()
     while True:
         if txin in utxo_keys(addr):
+            dbg(f"wait_for_txin: found {txin}")
             return
         time.sleep(0.5)
+        if VERBOSE and (time.time() - last_log) >= 5:
+            dbg(f"wait_for_txin: still waiting for {txin}")
+            last_log = time.time()
 
 def wait_for_inputs(addr: str, needed_txins: List[str]):
     need = len(needed_txins)
     if need == 0:
         return
     needed = set(needed_txins)
+    dbg(f"wait_for_inputs: need {need} at addr={addr[:16]}...")
+    last_log = time.time()
     while True:
         have = set(utxo_keys(addr))
         if len(needed & have) >= need:
+            dbg(f"wait_for_inputs: all {need} present")
             return
         time.sleep(1)
+        if VERBOSE and (time.time() - last_log) >= 5:
+            missing = list(needed - have)
+            dbg(f"wait_for_inputs: still missing {len(missing)} of {need}; e.g. {missing[:2]}")
+            last_log = time.time()
 
 def first_txin_at(addr: str) -> str:
     keys = utxo_keys(addr)
@@ -206,6 +255,7 @@ def build_sign_submit(txin: str, outs: List[Tuple[str, int]], change_addr: str, 
     body = str(base.with_suffix(".txbody"))
     signed = str(base.with_suffix(".signed"))
 
+    dbg(f"build: txin={txin}, outs={len(outs)}, change={change_addr[:16]}..., body={body}")
     if BUILD_SEM is not None:
         with BUILD_SEM:
             cli(["transaction", "build",
@@ -222,6 +272,7 @@ def build_sign_submit(txin: str, outs: List[Tuple[str, int]], change_addr: str, 
         raise RuntimeError(f"build produced no file: {body}")
 
     # sign (offline)
+    dbg(f"sign: body={body}, signed={signed}")
     cli(["transaction", "sign",
          "--signing-key-file", sign_key,
          "--tx-body-file", body,
@@ -235,6 +286,7 @@ def build_sign_submit(txin: str, outs: List[Tuple[str, int]], change_addr: str, 
         txid = cli(["transaction", "txid", "--tx-file", signed])
     except RuntimeError:
         txid = cli(["transaction", "txid", "--tx-body-file", body])
+    dbg(f"txid: {txid}")
 
     # submit with retry and throttle
     last_err = None
@@ -245,9 +297,11 @@ def build_sign_submit(txin: str, outs: List[Tuple[str, int]], change_addr: str, 
                     cli(["transaction", "submit", "--tx-file", signed], capture=False)
             else:
                 cli(["transaction", "submit", "--tx-file", signed], capture=False)
+            dbg(f"submit: ok txid={txid}")
             break
         except Exception as e:
             last_err = e
+            dbg(f"submit: retry due to {e}")
             time.sleep(1)
     else:
         raise RuntimeError(f"submit failed for {txin}: {last_err}")
@@ -275,6 +329,7 @@ def do_split_one(
 
     remain = b
     current_in = txin
+    dbg(f"split[l{lvl}]: start txin={txin}, b={b}")
     while remain > 0:
         k = min(remain, DEF_MAX_OUTS)
 
@@ -293,6 +348,7 @@ def do_split_one(
         base = workdir / rand_hex(8)
         outs = [(pay_to, share)] * k
 
+        dbg(f"split[l{lvl}]: build k={k}, in_val={in_val}, share={share}, usable={usable}")
         txid, change_index = build_sign_submit(current_in, outs, change_addr, sign_key, base)
 
         # record child outputs 0..k-1
@@ -305,6 +361,7 @@ def do_split_one(
         wait_for_txin(change_addr, next_in)
         current_in = next_in
         remain -= k
+        dbg(f"split[l{lvl}]: next_in={next_in}, remain={remain}")
 
     return part_file
 
@@ -323,10 +380,13 @@ def main():
     ap.add_argument("-o", "--output-address", type=Path, required=True, help="file containing final leaves address")
     ap.add_argument("-k", "--skey", type=Path, required=True, help="signing key file used to spend funding and change")
     ap.add_argument("--threads", type=int, default=DEF_THREADS, help="parallel splits per level")
+    ap.add_argument("-v", "--verbose", action="store_true", help="enable verbose debug logging")
     args = ap.parse_args()
 
     TESTNET_MAGIC = int(args.testnet_magic)
     SOCKET_PATH = args.socket_path
+    global VERBOSE
+    VERBOSE = bool(args.verbose)
 
     # fixed throttles
     BUILD_SEM = Semaphore(6)
@@ -360,6 +420,7 @@ def main():
     workroot = Path("fanout_work")
     workroot.mkdir(exist_ok=True)
 
+    dbg(f"query first input at {input_addr[:16]}...")
     g0 = first_txin_at(input_addr)
     if not g0:
         print(f"no UTxO found at {input_addr}", file=sys.stderr)
@@ -394,6 +455,7 @@ def main():
         cur_inputs = [x for x in in_file.read_text().splitlines() if x.strip()]
         n = len(cur_inputs)
         print(f"Level {lvl}: b={b}, amt=equal, txs={n}, threads={args.threads}")
+        dbg(f"level {lvl}: inputs={n}, pay_to={(pay_to[:16]+'...')}, change_to={(change_to[:16]+'...')}")
         t0 = time.time()
 
         part_paths: List[Path] = []
@@ -407,7 +469,12 @@ def main():
                     for txin in cur_inputs
                 ]
                 for fu in as_completed(futs):
-                    part_paths.append(fu.result())
+                    try:
+                        res = fu.result()
+                        part_paths.append(res)
+                    except Exception as e:
+                        dbg(f"split task error: {e}")
+                        raise
 
         with next_file.open("w") as out:
             for p in parts_dir.glob("*.next"):
