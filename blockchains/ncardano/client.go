@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -54,12 +55,23 @@ type transactionConfirmerHandle interface {
 }
 
 type cardanoTransactionConfirmer struct {
-	logger    core.Logger
-	pendings  map[string]*cardanoTransactionConfirmerPending
-	committed map[string]*committedTransaction
-	invalidated map[string]bool // Track transactions invalidated by rollbacks
-	txCBOR    map[string][]byte // Store original CBOR for resubmission
-	lock      sync.Mutex
+	logger       core.Logger
+	pendings     map[string]*cardanoTransactionConfirmerPending
+	committed    map[string]*committedTransaction
+	invalidated  map[string]bool // Track transactions invalidated by rollbacks
+	txCBOR       map[string][]byte // Store original CBOR for resubmission
+	blockDepth   map[string]*pendingTransactionBlock // Track transactions waiting for finality (txHash -> block info)
+	securityParam uint64                              // Number of blocks required for finality
+	currentTip   uint64                               // Current chain tip slot
+	lock         sync.Mutex
+}
+
+type pendingTransactionBlock struct {
+	txHash    string
+	blockSlot uint64
+	blockHash string
+	iact      core.Interaction
+	channel   chan confirmResult // Channel to notify when committed
 }
 
 type committedTransaction struct {
@@ -82,13 +94,16 @@ type blockSubscriber struct {
 	confirmer transactionConfirmer
 }
 
-func newCardanoTransactionConfirmer(logger core.Logger) *cardanoTransactionConfirmer {
+func newCardanoTransactionConfirmer(logger core.Logger, securityParam uint64) *cardanoTransactionConfirmer {
 	return &cardanoTransactionConfirmer{
-		logger:    logger,
-		pendings:  make(map[string]*cardanoTransactionConfirmerPending),
-		committed: make(map[string]*committedTransaction),
-		invalidated: make(map[string]bool),
-		txCBOR:    make(map[string][]byte),
+		logger:       logger,
+		pendings:     make(map[string]*cardanoTransactionConfirmerPending),
+		committed:    make(map[string]*committedTransaction),
+		invalidated:  make(map[string]bool),
+		txCBOR:       make(map[string][]byte),
+		blockDepth:   make(map[string]*pendingTransactionBlock),
+		securityParam: securityParam,
+		currentTip:   0,
 	}
 }
 
@@ -105,7 +120,7 @@ func (c *cardanoTransactionConfirmer) prepare(
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	// Check if transaction is already committed
+	// Check if transaction is already committed (deep enough)
 	if _, ok := c.committed[txHash]; ok {
 		delete(c.committed, txHash)
 		iact.ReportCommit()
@@ -114,7 +129,29 @@ func (c *cardanoTransactionConfirmer) prepare(
 		return pending, nil
 	}
 
-	// Add to pending transactions
+	// Check if transaction is already in blockDepth (found in a block but not deep enough yet)
+	if blockPending, ok := c.blockDepth[txHash]; ok {
+		// Associate the interaction and channel with this pending transaction
+		blockPending.iact = iact
+		blockPending.channel = channel
+		
+		// Check if it's already deep enough
+		depth := c.currentTip - blockPending.blockSlot
+		if depth >= c.securityParam {
+			// Already deep enough, commit immediately
+			txCBOR := c.txCBOR[txHash]
+			c.commitTransactionFromPending(blockPending, txCBOR)
+			return pending, nil
+		}
+		
+		// Not deep enough yet, will be committed when depth is reached
+		// Channel is already stored in blockPending
+		c.logger.Debugf("Transaction %s associated with interaction, waiting for finality (depth: %d, required: %d)", 
+			txHash, depth, c.securityParam)
+		return pending, nil
+	}
+
+	// Transaction not found yet, add to pending transactions (will be moved to blockDepth when found)
 	c.pendings[txHash] = pending
 	return pending, nil
 }
@@ -144,35 +181,126 @@ func (c *cardanoTransactionConfirmer) reportTransaction(txHash string, blockSlot
 	// Get stored CBOR for this transaction
 	txCBOR := c.txCBOR[txHash]
 
-	// Check if transaction is in pending transactions
+	// Check if transaction is in pending transactions (waiting for submission)
 	if pending, ok := c.pendings[txHash]; ok {
 		delete(c.pendings, txHash)
-		pending.iact.ReportCommit()
-		pending.channel <- confirmResult{false, nil}
-		close(pending.channel)
 		
-		// Store committed transaction with block info and CBOR
-		c.committed[txHash] = &committedTransaction{
-			interaction: pending.iact,
-			blockSlot:   blockSlot,
-			blockHash:   blockHash,
-			txCBOR:      txCBOR,
+		// Store transaction in blockDepth map to wait for finality
+		c.blockDepth[txHash] = &pendingTransactionBlock{
+			txHash:    txHash,
+			blockSlot: blockSlot,
+			blockHash: blockHash,
+			iact:      pending.iact,
+			channel:   pending.channel, // Store channel for notification
 		}
 		
-		// Update last confirmed transaction time (this will be called from the block subscriber)
-		// Note: We need access to the client to update this, but we don't have it here
-		// The client will handle this in TriggerInteraction
+		// Check if this block is already deep enough (shouldn't happen normally, but possible)
+		depth := c.currentTip - blockSlot
+		if depth >= c.securityParam {
+			// Already deep enough, commit immediately
+			c.commitTransaction(txHash, blockSlot, blockHash, pending.iact, txCBOR)
+			pending.channel <- confirmResult{false, nil}
+			close(pending.channel)
+		} else {
+			// Not deep enough yet, will be committed when depth is reached
+			// Channel is stored in blockDepth for later notification
+			c.logger.Debugf("Transaction %s found in block %d, waiting for finality (current depth: %d, required: %d)", 
+				txHash, blockSlot, depth, c.securityParam)
+		}
 		return
 	}
 
-	// If not in pending, add to committed for future reference
+	// If not in pending, check if we already have it in blockDepth (was found before prepare was called)
+	if _, exists := c.blockDepth[txHash]; !exists {
+		// Add to blockDepth for future finality check (we'll have interaction reference later)
+		c.blockDepth[txHash] = &pendingTransactionBlock{
+			txHash:    txHash,
+			blockSlot: blockSlot,
+			blockHash: blockHash,
+			iact:      nil,    // No interaction reference yet
+			channel:   nil,    // No channel yet
+		}
+		c.logger.Tracef("Transaction %s found in block %d, waiting for interaction reference", txHash, blockSlot)
+	}
+	
+	// Check depth immediately in case it's already deep enough
+	depth := c.currentTip - blockSlot
+	if depth >= c.securityParam {
+		c.checkAndCommitDeepTransactions()
+	}
+}
+
+// commitTransaction commits a transaction that has reached finality depth
+func (c *cardanoTransactionConfirmer) commitTransaction(txHash string, blockSlot uint64, blockHash string, iact core.Interaction, txCBOR []byte) {
+	if iact != nil {
+		iact.ReportCommit()
+	}
+	
+	// Store committed transaction with block info and CBOR
 	c.committed[txHash] = &committedTransaction{
-		interaction: nil, // We don't have the interaction reference
+		interaction: iact,
 		blockSlot:   blockSlot,
 		blockHash:   blockHash,
 		txCBOR:      txCBOR,
 	}
-	c.logger.Tracef("Transaction %s already committed in block %d", txHash, blockSlot)
+	
+	// Remove from blockDepth
+	delete(c.blockDepth, txHash)
+	
+	c.logger.Debugf("Transaction %s committed (block %d is %d blocks deep)", txHash, blockSlot, c.currentTip-blockSlot)
+}
+
+// commitTransactionFromPending commits a transaction from pendingTransactionBlock and notifies channel
+func (c *cardanoTransactionConfirmer) commitTransactionFromPending(pending *pendingTransactionBlock, txCBOR []byte) {
+	// Commit the transaction
+	c.commitTransaction(pending.txHash, pending.blockSlot, pending.blockHash, pending.iact, txCBOR)
+	
+	// Notify channel if it exists
+	if pending.channel != nil {
+		select {
+		case pending.channel <- confirmResult{false, nil}:
+			// Successfully sent
+		default:
+			// Channel buffer full or closed, ignore
+		}
+		close(pending.channel)
+	}
+}
+
+// checkAndCommitDeepTransactions checks all pending transactions and commits those that are deep enough
+func (c *cardanoTransactionConfirmer) checkAndCommitDeepTransactions() {
+	var toCommit []*pendingTransactionBlock
+	
+	// First pass: identify transactions to commit
+	for txHash, pending := range c.blockDepth {
+		depth := c.currentTip - pending.blockSlot
+		if depth >= c.securityParam {
+			// This transaction's block is deep enough, prepare to commit it
+			pendingCopy := *pending
+			pendingCopy.txHash = txHash // Ensure txHash is set
+			toCommit = append(toCommit, &pendingCopy)
+			
+			// Remove from blockDepth immediately to avoid double-processing
+			delete(c.blockDepth, txHash)
+		}
+	}
+	
+	// Second pass: commit transactions (outside of lock iteration)
+	for _, pending := range toCommit {
+		txCBOR := c.txCBOR[pending.txHash]
+		c.commitTransactionFromPending(pending, txCBOR)
+	}
+}
+
+// updateTip updates the current chain tip and checks for finality
+func (c *cardanoTransactionConfirmer) updateTip(newTip uint64) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	
+	if newTip > c.currentTip {
+		c.currentTip = newTip
+		c.checkAndCommitDeepTransactions()
+	}
 }
 
 func (c *cardanoTransactionConfirmer) storeTxCBOR(txHash string, txCBOR []byte) {
@@ -226,6 +354,43 @@ func (c *cardanoTransactionConfirmer) handleRollback(rollbackSlot uint64) {
 			c.invalidated[txHash] = true
 			delete(c.committed, txHash)
 		}
+	}
+	
+	// Check all pending transactions waiting for finality (in blockDepth)
+	for txHash, pending := range c.blockDepth {
+		if pending.blockSlot >= rollbackSlot {
+			// This transaction was in a block that was rolled back
+			invalidatedCount++
+			invalidatedTxs = append(invalidatedTxs, txHash)
+			
+			// Store CBOR for resubmission if available
+			txCBOR := c.txCBOR[txHash]
+			if len(txCBOR) > 0 {
+				c.txCBOR[txHash] = txCBOR
+			}
+			
+			// If we have the interaction reference, log a warning
+			if pending.iact != nil {
+				c.logger.Warnf("Transaction %s waiting for finality was in rolled-back block %d (rollback to slot %d)", 
+					txHash, pending.blockSlot, rollbackSlot)
+			}
+			
+			// Mark as invalidated and remove from blockDepth
+			c.invalidated[txHash] = true
+			delete(c.blockDepth, txHash)
+			
+			// If there's a pending channel waiting, close it (will trigger resend)
+			if pendingChan, ok := c.pendings[txHash]; ok {
+				delete(c.pendings, txHash)
+				pendingChan.channel <- confirmResult{true, nil} // Signal resend needed
+				close(pendingChan.channel)
+			}
+		}
+	}
+	
+	// Update current tip to the rollback point (blocks behind this were rolled back)
+	if rollbackSlot < c.currentTip {
+		c.currentTip = rollbackSlot
 	}
 	
 	if invalidatedCount > 0 {
@@ -296,6 +461,10 @@ func (bs *blockSubscriber) handleNewBlock(
 		return nil
 	}
 
+	// Update the current tip (from the tip parameter)
+	confirmer := bs.confirmer.(*cardanoTransactionConfirmer)
+	confirmer.updateTip(tip.Point.Slot)
+
 	transactions := block.Transactions()
 	if len(transactions) == 0 {
 		return nil
@@ -328,6 +497,60 @@ func (bs *blockSubscriber) handleRollback(
 	return nil
 }
 
+// extractSecurityParam extracts SecurityParam from genesis config using reflection (like main.go)
+func extractSecurityParam(genesisConfig interface{}) (uint64, error) {
+	// Default value (mainnet-like)
+	defaultSecurityParam := uint64(2160)
+	
+	if genesisConfig == nil {
+		return defaultSecurityParam, fmt.Errorf("genesis config is nil")
+	}
+	
+	// Use reflection to access struct fields (like main.go does)
+	v := reflect.ValueOf(genesisConfig)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+	
+	// Try to get SecurityParam field
+	field := v.FieldByName("SecurityParam")
+	if !field.IsValid() {
+		// Field not found - log available fields for debugging
+		var fieldNames []string
+		for i := 0; i < v.NumField(); i++ {
+			fieldNames = append(fieldNames, v.Type().Field(i).Name)
+		}
+		return defaultSecurityParam, fmt.Errorf("SecurityParam field not found in genesis config. Available fields: %v", fieldNames)
+	}
+	
+	// Convert to uint64
+	var securityParam uint64
+	switch field.Kind() {
+	case reflect.Uint64:
+		securityParam = field.Uint()
+	case reflect.Uint32:
+		securityParam = uint64(field.Uint())
+	case reflect.Uint:
+		securityParam = uint64(field.Uint())
+	case reflect.Int64:
+		securityParam = uint64(field.Int())
+	case reflect.Int32:
+		securityParam = uint64(field.Int())
+	case reflect.Int:
+		securityParam = uint64(field.Int())
+	default:
+		// Can't convert, use default
+		return defaultSecurityParam, nil
+	}
+	
+	if securityParam == 0 {
+		// Invalid value, use default
+		return defaultSecurityParam, nil
+	}
+	
+	return securityParam, nil
+}
+
 // calculateFinalityTime calculates the transaction finality time based on protocol parameters
 func calculateFinalityTime(protocolParams interface{}) time.Duration {
 	// Default values (mainnet-like)
@@ -356,8 +579,10 @@ func NewBlockchainClient(logger core.Logger, socketPath string) (*BlockchainClie
 	}
 
 	errorChan := make(chan error, 10)
-	// Create confirmer and subscriber first (confirm again with Andrei)
-	confirmer := newCardanoTransactionConfirmer(logger)
+	
+	// Create confirmer with default securityParam (will be updated after querying)
+	defaultSecurityParam := uint64(2160)
+	confirmer := newCardanoTransactionConfirmer(logger, defaultSecurityParam)
 	subscriber := newBlockSubscriber(logger, nil, confirmer)
 
 	// Create the Ouroboros connection
@@ -387,7 +612,28 @@ func NewBlockchainClient(logger core.Logger, socketPath string) (*BlockchainClie
 
 	subscriber.conn = oConn
 
-	// Query protocol parameters to calculate finality time
+	// Query genesis config to get SecurityParam (like main.go does)
+	logger.Debugf("Querying genesis config for SecurityParam...")
+	genesisConfig, err := oConn.LocalStateQuery().Client.GetGenesisConfig()
+	var securityParam uint64 = defaultSecurityParam
+	if err != nil {
+		logger.Warnf("Failed to query genesis config, using default SecurityParam: %v", err)
+	} else {
+		// Extract SecurityParam from genesis config
+		securityParam, err = extractSecurityParam(genesisConfig)
+		if err != nil {
+			logger.Warnf("Failed to extract SecurityParam, using default: %v", err)
+			securityParam = defaultSecurityParam
+		} else {
+			logger.Infof("Extracted SecurityParam: %d blocks", securityParam)
+		}
+		// Update confirmer with actual securityParam
+		confirmer.lock.Lock()
+		confirmer.securityParam = securityParam
+		confirmer.lock.Unlock()
+	}
+
+	// Query protocol parameters for finality time calculation
 	logger.Debugf("Querying protocol parameters for finality calculation...")
 	protocolParams, err := oConn.LocalStateQuery().Client.GetCurrentProtocolParams()
 	var finalityTime time.Duration
