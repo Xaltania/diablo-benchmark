@@ -43,6 +43,7 @@ type transactionConfirmer interface {
 	reportTransaction(string, uint64, string)
 	storeTxCBOR(string, []byte)
 	resubmitInvalidatedTx(string, []byte) error
+	setResubmitFunc(func(string, []byte) error) // Set callback to resubmit transactions
 }
 
 type confirmResult struct {
@@ -55,23 +56,27 @@ type transactionConfirmerHandle interface {
 }
 
 type cardanoTransactionConfirmer struct {
-	logger       core.Logger
-	pendings     map[string]*cardanoTransactionConfirmerPending
-	committed    map[string]*committedTransaction
-	invalidated  map[string]bool // Track transactions invalidated by rollbacks
-	txCBOR       map[string][]byte // Store original CBOR for resubmission
-	blockDepth   map[string]*pendingTransactionBlock // Track transactions waiting for finality (txHash -> block info)
-	securityParam uint64                              // Number of blocks required for finality
-	currentTip   uint64                               // Current chain tip slot
-	lock         sync.Mutex
+	logger          core.Logger
+	pendings        map[string]*cardanoTransactionConfirmerPending
+	committed       map[string]*committedTransaction
+	invalidated     map[string]bool // Track transactions invalidated by rollbacks
+	txCBOR          map[string][]byte // Store original CBOR for resubmission
+	blockDepth      map[string]*pendingTransactionBlock // Track transactions waiting for finality (txHash -> block info)
+	securityParam   uint64                              // Number of blocks required for finality
+	activeSlotsCoeff float64                            // Active slots coefficient for finality depth calculation
+	currentTip      uint64                               // Current chain tip slot
+	resubmitFunc    func(string, []byte) error           // Callback to resubmit transactions
+	lock            sync.Mutex
 }
 
 type pendingTransactionBlock struct {
-	txHash    string
-	blockSlot uint64
-	blockHash string
-	iact      core.Interaction
-	channel   chan confirmResult // Channel to notify when committed
+	txHash       string
+	blockSlot    uint64
+	blockHash    string
+	iact         core.Interaction
+	channel      chan confirmResult // Channel to notify when committed
+	isRecovery   bool               // True if this is tracking a transaction after rollback
+	rollbackSlot uint64             // Slot where rollback occurred (for recovery transactions)
 }
 
 type committedTransaction struct {
@@ -94,17 +99,23 @@ type blockSubscriber struct {
 	confirmer transactionConfirmer
 }
 
-func newCardanoTransactionConfirmer(logger core.Logger, securityParam uint64) *cardanoTransactionConfirmer {
+func newCardanoTransactionConfirmer(logger core.Logger, securityParam uint64, activeSlotsCoeff float64) *cardanoTransactionConfirmer {
 	return &cardanoTransactionConfirmer{
-		logger:       logger,
-		pendings:     make(map[string]*cardanoTransactionConfirmerPending),
-		committed:    make(map[string]*committedTransaction),
-		invalidated:  make(map[string]bool),
-		txCBOR:       make(map[string][]byte),
-		blockDepth:   make(map[string]*pendingTransactionBlock),
-		securityParam: securityParam,
-		currentTip:   0,
+		logger:          logger,
+		pendings:        make(map[string]*cardanoTransactionConfirmerPending),
+		committed:       make(map[string]*committedTransaction),
+		invalidated:     make(map[string]bool),
+		txCBOR:          make(map[string][]byte),
+		blockDepth:      make(map[string]*pendingTransactionBlock),
+		securityParam:   securityParam,
+		activeSlotsCoeff: activeSlotsCoeff,
+		currentTip:      0,
 	}
+}
+
+// getFinalityDepthThreshold returns the number of blocks required for finality: (3 * securityParam / activeSlotsCoeff)
+func (c *cardanoTransactionConfirmer) getFinalityDepthThreshold() uint64 {
+	return uint64(3.0 * float64(c.securityParam) / c.activeSlotsCoeff)
 }
 
 func (c *cardanoTransactionConfirmer) prepare(
@@ -137,7 +148,8 @@ func (c *cardanoTransactionConfirmer) prepare(
 		
 		// Check if it's already deep enough
 		depth := c.currentTip - blockPending.blockSlot
-		if depth >= c.securityParam {
+		finalityThreshold := c.getFinalityDepthThreshold()
+		if depth >= finalityThreshold {
 			// Already deep enough, commit immediately
 			txCBOR := c.txCBOR[txHash]
 			c.commitTransactionFromPending(blockPending, txCBOR)
@@ -147,7 +159,7 @@ func (c *cardanoTransactionConfirmer) prepare(
 		// Not deep enough yet, will be committed when depth is reached
 		// Channel is already stored in blockPending
 		c.logger.Debugf("Transaction %s associated with interaction, waiting for finality (depth: %d, required: %d)", 
-			txHash, depth, c.securityParam)
+			txHash, depth, finalityThreshold)
 		return pending, nil
 	}
 
@@ -181,22 +193,55 @@ func (c *cardanoTransactionConfirmer) reportTransaction(txHash string, blockSlot
 	// Get stored CBOR for this transaction
 	txCBOR := c.txCBOR[txHash]
 
+	// Check if this is a recovery transaction that was found again
+	if pending, ok := c.blockDepth[txHash]; ok && pending.isRecovery {
+		// Transaction was in recovery tracking and was found again
+		c.logger.Infof("Recovery transaction %s found again in block %d after rollback", txHash, blockSlot)
+		
+		// Update with the new block information
+		pending.blockSlot = blockSlot
+		pending.blockHash = blockHash
+		
+		// Clear invalidated flag since we found it again
+		delete(c.invalidated, txHash)
+		
+		// Check if it's already deep enough
+		depth := c.currentTip - blockSlot
+		finalityThreshold := c.getFinalityDepthThreshold()
+		if depth >= finalityThreshold {
+			// Already deep enough, commit immediately
+			c.commitTransaction(txHash, blockSlot, blockHash, pending.iact, txCBOR)
+			delete(c.blockDepth, txHash)
+			return
+		}
+		
+		// Remove recovery flag and track normally for finality
+		pending.isRecovery = false
+		pending.rollbackSlot = 0
+		
+		c.logger.Debugf("Transaction %s found again in block %d, waiting for finality (current depth: %d, required: %d)", 
+			txHash, blockSlot, depth, finalityThreshold)
+		return
+	}
+
 	// Check if transaction is in pending transactions (waiting for submission)
 	if pending, ok := c.pendings[txHash]; ok {
 		delete(c.pendings, txHash)
 		
 		// Store transaction in blockDepth map to wait for finality
 		c.blockDepth[txHash] = &pendingTransactionBlock{
-			txHash:    txHash,
-			blockSlot: blockSlot,
-			blockHash: blockHash,
-			iact:      pending.iact,
-			channel:   pending.channel, // Store channel for notification
+			txHash:     txHash,
+			blockSlot:  blockSlot,
+			blockHash:  blockHash,
+			iact:       pending.iact,
+			channel:    pending.channel, // Store channel for notification
+			isRecovery: false,
 		}
 		
 		// Check if this block is already deep enough (shouldn't happen normally, but possible)
 		depth := c.currentTip - blockSlot
-		if depth >= c.securityParam {
+		finalityThreshold := c.getFinalityDepthThreshold()
+		if depth >= finalityThreshold {
 			// Already deep enough, commit immediately
 			c.commitTransaction(txHash, blockSlot, blockHash, pending.iact, txCBOR)
 			pending.channel <- confirmResult{false, nil}
@@ -205,7 +250,7 @@ func (c *cardanoTransactionConfirmer) reportTransaction(txHash string, blockSlot
 			// Not deep enough yet, will be committed when depth is reached
 			// Channel is stored in blockDepth for later notification
 			c.logger.Debugf("Transaction %s found in block %d, waiting for finality (current depth: %d, required: %d)", 
-				txHash, blockSlot, depth, c.securityParam)
+				txHash, blockSlot, depth, finalityThreshold)
 		}
 		return
 	}
@@ -214,18 +259,20 @@ func (c *cardanoTransactionConfirmer) reportTransaction(txHash string, blockSlot
 	if _, exists := c.blockDepth[txHash]; !exists {
 		// Add to blockDepth for future finality check (we'll have interaction reference later)
 		c.blockDepth[txHash] = &pendingTransactionBlock{
-			txHash:    txHash,
-			blockSlot: blockSlot,
-			blockHash: blockHash,
-			iact:      nil,    // No interaction reference yet
-			channel:   nil,    // No channel yet
+			txHash:     txHash,
+			blockSlot:  blockSlot,
+			blockHash:  blockHash,
+			iact:       nil,    // No interaction reference yet
+			channel:    nil,    // No channel yet
+			isRecovery: false,
 		}
 		c.logger.Tracef("Transaction %s found in block %d, waiting for interaction reference", txHash, blockSlot)
 	}
 	
 	// Check depth immediately in case it's already deep enough
 	depth := c.currentTip - blockSlot
-	if depth >= c.securityParam {
+	finalityThreshold := c.getFinalityDepthThreshold()
+	if depth >= finalityThreshold {
 		c.checkAndCommitDeepTransactions()
 	}
 }
@@ -271,10 +318,16 @@ func (c *cardanoTransactionConfirmer) commitTransactionFromPending(pending *pend
 func (c *cardanoTransactionConfirmer) checkAndCommitDeepTransactions() {
 	var toCommit []*pendingTransactionBlock
 	
-	// First pass: identify transactions to commit
+	// First pass: identify transactions to commit (skip recovery transactions)
+	finalityThreshold := c.getFinalityDepthThreshold()
 	for txHash, pending := range c.blockDepth {
+		if pending.isRecovery {
+			// Skip recovery transactions - handled by checkRecoveryTransactions
+			continue
+		}
+		
 		depth := c.currentTip - pending.blockSlot
-		if depth >= c.securityParam {
+		if depth >= finalityThreshold {
 			// This transaction's block is deep enough, prepare to commit it
 			pendingCopy := *pending
 			pendingCopy.txHash = txHash // Ensure txHash is set
@@ -290,6 +343,112 @@ func (c *cardanoTransactionConfirmer) checkAndCommitDeepTransactions() {
 		txCBOR := c.txCBOR[pending.txHash]
 		c.commitTransactionFromPending(pending, txCBOR)
 	}
+	
+	// Check recovery transactions after checking normal finality
+	c.checkRecoveryTransactions()
+}
+
+// checkRecoveryTransactions checks recovery transactions and resubmits if not found after securityParam blocks
+func (c *cardanoTransactionConfirmer) checkRecoveryTransactions() {
+	if c.resubmitFunc == nil {
+		// Can't resubmit without callback
+		return
+	}
+	
+	type resubmitInfo struct {
+		txHash string
+		txCBOR []byte
+	}
+	var toResubmit []resubmitInfo
+	
+	// Check all recovery transactions
+	for txHash, pending := range c.blockDepth {
+		if !pending.isRecovery {
+			continue
+		}
+		
+		// If transaction was found again (blockSlot > 0), handle it normally
+		if pending.blockSlot > 0 {
+			// Transaction was found again after rollback
+			// Remove recovery flag and track normally for finality
+			pending.isRecovery = false
+			pending.rollbackSlot = 0
+			
+			// Clear invalidated flag since we found it again
+			delete(c.invalidated, txHash)
+			
+			c.logger.Infof("Transaction %s found again after rollback in block %d, tracking for finality", txHash, pending.blockSlot)
+			
+			// Check if it's already deep enough
+			depth := c.currentTip - pending.blockSlot
+			finalityThreshold := c.getFinalityDepthThreshold()
+			if depth >= finalityThreshold {
+				// Already deep enough, commit immediately
+				txCBOR := c.txCBOR[txHash]
+				c.commitTransactionFromPending(pending, txCBOR)
+				delete(c.blockDepth, txHash)
+			}
+			continue
+		}
+		
+		// Transaction hasn't been found yet - check if enough blocks have passed since rollback
+		blocksSinceRollback := c.currentTip - pending.rollbackSlot
+		if blocksSinceRollback >= c.securityParam {
+			// Transaction not found after securityParam blocks - resubmit it
+			txCBOR := c.txCBOR[txHash]
+			if len(txCBOR) > 0 {
+				toResubmit = append(toResubmit, resubmitInfo{txHash: txHash, txCBOR: txCBOR})
+				c.logger.Warnf("Transaction %s not found after %d blocks since rollback - will resubmit", 
+					txHash, blocksSinceRollback)
+			} else {
+				c.logger.Warnf("Transaction %s not found after %d blocks since rollback but no CBOR available - cannot resubmit", 
+					txHash, blocksSinceRollback)
+				// Remove from recovery tracking
+				delete(c.blockDepth, txHash)
+			}
+		}
+	}
+	
+	// If no transactions to resubmit, return early (lock already held)
+	if len(toResubmit) == 0 {
+		return
+	}
+	
+	// Remove from tracking before unlocking (to avoid double-processing)
+	for _, info := range toResubmit {
+		delete(c.blockDepth, info.txHash)
+		delete(c.invalidated, info.txHash)
+	}
+	
+	// Unlock before calling resubmit callbacks (which may take time)
+	c.lock.Unlock()
+	
+	// Resubmit transactions (outside of lock)
+	for _, info := range toResubmit {
+		err := c.resubmitFunc(info.txHash, info.txCBOR)
+		
+		if err != nil {
+			c.logger.Errorf("Failed to resubmit transaction %s: %v", info.txHash, err)
+			// Re-add to recovery tracking for another attempt later
+			c.lock.Lock()
+			c.blockDepth[info.txHash] = &pendingTransactionBlock{
+				txHash:       info.txHash,
+				blockSlot:    0,
+				blockHash:    "",
+				iact:         nil,
+				channel:      nil,
+				isRecovery:   true,
+				rollbackSlot: c.currentTip, // Use current tip as new rollback point
+			}
+			c.invalidated[info.txHash] = true
+			c.lock.Unlock()
+		} else {
+			c.logger.Infof("Successfully resubmitted transaction %s after not finding it for %d blocks", info.txHash, c.securityParam)
+		}
+	}
+	
+	// Re-lock before returning (since caller expects lock to be held)
+	c.lock.Lock()
 }
 
 // updateTip updates the current chain tip and checks for finality
@@ -323,6 +482,12 @@ func (c *cardanoTransactionConfirmer) resubmitInvalidatedTx(txHash string, txCBO
 	return nil
 }
 
+func (c *cardanoTransactionConfirmer) setResubmitFunc(fn func(string, []byte) error) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.resubmitFunc = fn
+}
+
 func (c *cardanoTransactionConfirmer) handleRollback(rollbackSlot uint64) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -344,15 +509,27 @@ func (c *cardanoTransactionConfirmer) handleRollback(rollbackSlot uint64) {
 			
 			// If we have the interaction reference, we can report an error
 			if committedTx.interaction != nil {
-				// Note: We can't directly set HasError here since we don't have access to the runtime
-				// But we can log a warning and the transaction will be marked as failed
-				c.logger.Warnf("Transaction %s was in rolled-back block %d (rollback to slot %d)", 
+				c.logger.Warnf("Transaction %s was in rolled-back block %d (rollback to slot %d) - tracking for recovery", 
 					txHash, committedTx.blockSlot, rollbackSlot)
 			}
 			
-			// Mark as invalidated and remove from committed
+			// Add to recovery tracking instead of just marking as invalidated
+			// This will check if the transaction appears again in subsequent blocks
+			c.blockDepth[txHash] = &pendingTransactionBlock{
+				txHash:       txHash,
+				blockSlot:    0, // Will be set when found in a block
+				blockHash:    "",
+				iact:         committedTx.interaction,
+				channel:      nil, // No channel for recovery tracking
+				isRecovery:   true,
+				rollbackSlot: rollbackSlot,
+			}
+			
+			// Mark as invalidated for now (will be cleared if found again)
 			c.invalidated[txHash] = true
 			delete(c.committed, txHash)
+			
+			c.logger.Infof("Transaction %s added to recovery tracking after rollback", txHash)
 		}
 	}
 	
@@ -371,20 +548,20 @@ func (c *cardanoTransactionConfirmer) handleRollback(rollbackSlot uint64) {
 			
 			// If we have the interaction reference, log a warning
 			if pending.iact != nil {
-				c.logger.Warnf("Transaction %s waiting for finality was in rolled-back block %d (rollback to slot %d)", 
+				c.logger.Warnf("Transaction %s waiting for finality was in rolled-back block %d (rollback to slot %d) - tracking for recovery", 
 					txHash, pending.blockSlot, rollbackSlot)
 			}
 			
-			// Mark as invalidated and remove from blockDepth
-			c.invalidated[txHash] = true
-			delete(c.blockDepth, txHash)
+			// Convert to recovery tracking
+			pending.blockSlot = 0     // Reset - will be set when found again
+			pending.blockHash = ""     // Reset
+			pending.isRecovery = true
+			pending.rollbackSlot = rollbackSlot
 			
-			// If there's a pending channel waiting, close it (will trigger resend)
-			if pendingChan, ok := c.pendings[txHash]; ok {
-				delete(c.pendings, txHash)
-				pendingChan.channel <- confirmResult{true, nil} // Signal resend needed
-				close(pendingChan.channel)
-			}
+			// Mark as invalidated for now (will be cleared if found again)
+			c.invalidated[txHash] = true
+			
+			c.logger.Infof("Transaction %s added to recovery tracking after rollback", txHash)
 		}
 	}
 	
@@ -394,7 +571,9 @@ func (c *cardanoTransactionConfirmer) handleRollback(rollbackSlot uint64) {
 	}
 	
 	if invalidatedCount > 0 {
-		c.logger.Warnf("Chain rollback invalidated %d transactions: %v", invalidatedCount, invalidatedTxs)
+		c.logger.Warnf("Chain rollback invalidated %d transactions (tracking for recovery): %v", invalidatedCount, invalidatedTxs)
+		// Check recovery transactions after updating tip
+		c.checkRecoveryTransactions()
 	}
 }
 
@@ -551,6 +730,93 @@ func extractSecurityParam(genesisConfig interface{}) (uint64, error) {
 	return securityParam, nil
 }
 
+// convertToFloat64 is a helper function to convert various numeric types to float64 (like main.go)
+func convertToFloat64(v interface{}) (float64, bool) {
+	switch val := v.(type) {
+	case float64:
+		return val, true
+	case float32:
+		return float64(val), true
+	case int:
+		return float64(val), true
+	case int8:
+		return float64(val), true
+	case int16:
+		return float64(val), true
+	case int32:
+		return float64(val), true
+	case int64:
+		return float64(val), true
+	case uint:
+		return float64(val), true
+	case uint8:
+		return float64(val), true
+	case uint16:
+		return float64(val), true
+	case uint32:
+		return float64(val), true
+	case uint64:
+		return float64(val), true
+	default:
+		return 0, false
+	}
+}
+
+// extractActiveSlotsCoeff extracts ActiveSlotsCoeff from genesis config using reflection (like main.go)
+func extractActiveSlotsCoeff(genesisConfig interface{}) (float64, error) {
+	// Default value (mainnet-like)
+	defaultActiveSlotsCoeff := 0.2 // Set this because parsing is being a pain.
+	
+	if genesisConfig == nil {
+		return defaultActiveSlotsCoeff, fmt.Errorf("genesis config is nil")
+	}
+	
+	// Use reflection to access struct fields (like main.go does)
+	v := reflect.ValueOf(genesisConfig)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+	
+	// Try to get ActiveSlotsCoeff field
+	field := v.FieldByName("ActiveSlotsCoeff")
+	if !field.IsValid() {
+		return defaultActiveSlotsCoeff, fmt.Errorf("ActiveSlotsCoeff field not found in genesis config")
+	}
+	
+	// Handle ActiveSlotsCoeff which appears to be a slice representing a rational number [numerator, denominator]
+	if field.Kind() == reflect.Slice && field.Len() == 2 {
+		num := field.Index(0).Interface()
+		den := field.Index(1).Interface()
+		
+		// Try to convert to float for calculation
+		numFloat, ok := convertToFloat64(num)
+		if !ok {
+			return defaultActiveSlotsCoeff, fmt.Errorf("failed to convert numerator to float64")
+		}
+		
+		denFloat, ok := convertToFloat64(den)
+		if !ok {
+			return defaultActiveSlotsCoeff, fmt.Errorf("failed to convert denominator to float64")
+		}
+		
+		if denFloat == 0 {
+			return defaultActiveSlotsCoeff, fmt.Errorf("denominator is zero")
+		}
+		
+		return numFloat / denFloat, nil
+	}
+	
+	// Try direct float conversion if not a slice
+	switch field.Kind() {
+	case reflect.Float64:
+		return field.Float(), nil
+	case reflect.Float32:
+		return float64(field.Float()), nil
+	default:
+		return defaultActiveSlotsCoeff, fmt.Errorf("ActiveSlotsCoeff field is not a slice or float")
+	}
+}
+
 // calculateFinalityTime calculates the transaction finality time based on protocol parameters
 func calculateFinalityTime(protocolParams interface{}) time.Duration {
 	// Default values (mainnet-like)
@@ -566,8 +832,8 @@ func calculateFinalityTime(protocolParams interface{}) time.Duration {
 		// For now, we use the default values which are reasonable for mainnet
 	}
 	
-	// Calculate finality time: ((1 / activeSlotsCoeff) * slotLength) * securityParam
-	finalityTime := time.Duration(float64(1.0/activeSlotsCoeff) * float64(slotLength) * float64(securityParam))
+	// Calculate finality time: (3 * securityParam / activeSlotsCoeff) * slotLength
+	finalityTime := time.Duration(float64(3.0 * float64(securityParam) / activeSlotsCoeff) * float64(slotLength))
 	
 	return finalityTime
 }
@@ -580,9 +846,10 @@ func NewBlockchainClient(logger core.Logger, socketPath string) (*BlockchainClie
 
 	errorChan := make(chan error, 10)
 	
-	// Create confirmer with default securityParam (will be updated after querying)
+	// Create confirmer with default securityParam and activeSlotsCoeff (will be updated after querying)
 	defaultSecurityParam := uint64(2160)
-	confirmer := newCardanoTransactionConfirmer(logger, defaultSecurityParam)
+	defaultActiveSlotsCoeff := 0.05
+	confirmer := newCardanoTransactionConfirmer(logger, defaultSecurityParam, defaultActiveSlotsCoeff)
 	subscriber := newBlockSubscriber(logger, nil, confirmer)
 
 	// Create the Ouroboros connection
@@ -612,12 +879,13 @@ func NewBlockchainClient(logger core.Logger, socketPath string) (*BlockchainClie
 
 	subscriber.conn = oConn
 
-	// Query genesis config to get SecurityParam (like main.go does)
-	logger.Debugf("Querying genesis config for SecurityParam...")
+	// Query genesis config to get SecurityParam and ActiveSlotsCoeff (like main.go does)
+	logger.Debugf("Querying genesis config for SecurityParam and ActiveSlotsCoeff...")
 	genesisConfig, err := oConn.LocalStateQuery().Client.GetGenesisConfig()
 	var securityParam uint64 = defaultSecurityParam
+	var activeSlotsCoeff float64 = defaultActiveSlotsCoeff
 	if err != nil {
-		logger.Warnf("Failed to query genesis config, using default SecurityParam: %v", err)
+		logger.Warnf("Failed to query genesis config, using default SecurityParam and ActiveSlotsCoeff: %v", err)
 	} else {
 		// Extract SecurityParam from genesis config
 		securityParam, err = extractSecurityParam(genesisConfig)
@@ -627,9 +895,20 @@ func NewBlockchainClient(logger core.Logger, socketPath string) (*BlockchainClie
 		} else {
 			logger.Infof("Extracted SecurityParam: %d blocks", securityParam)
 		}
-		// Update confirmer with actual securityParam
+		
+		// Extract ActiveSlotsCoeff from genesis config
+		activeSlotsCoeff, err = extractActiveSlotsCoeff(genesisConfig)
+		if err != nil {
+			logger.Warnf("Failed to extract ActiveSlotsCoeff, using default: %v", err)
+			activeSlotsCoeff = defaultActiveSlotsCoeff
+		} else {
+			logger.Infof("Extracted ActiveSlotsCoeff: %.6f", activeSlotsCoeff)
+		}
+		
+		// Update confirmer with actual values
 		confirmer.lock.Lock()
 		confirmer.securityParam = securityParam
+		confirmer.activeSlotsCoeff = activeSlotsCoeff
 		confirmer.lock.Unlock()
 	}
 
@@ -668,6 +947,9 @@ func NewBlockchainClient(logger core.Logger, socketPath string) (*BlockchainClie
 		lastConfirmedTx: time.Time{},
 		allTxsSubmitted: false,
 	}
+	
+	// Set resubmit callback for the confirmer
+	confirmer.setResubmitFunc(client.resubmitTransaction)
 	
 	// Start the invalidated transaction monitor
 	client.StartInvalidatedTransactionMonitor()
