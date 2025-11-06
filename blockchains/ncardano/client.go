@@ -40,10 +40,12 @@ type BlockchainClient struct {
 type transactionConfirmer interface {
 	prepare(core.Interaction, string) (transactionConfirmerHandle, error)
 	remove(string)
-	reportTransaction(string, uint64, string)
+	reportTransaction(string, uint64, uint64, string) // txHash, inclusionHeight, inclusionSlot, blockHash
 	storeTxCBOR(string, []byte)
-	resubmitInvalidatedTx(string, []byte) error
 	setResubmitFunc(func(string, []byte) error) // Set callback to resubmit transactions
+	setConnection(*ouroboros.Connection) // Set connection for querying immutable tip
+	updateImmutableTip() error // Query and update immutable tip from node
+	checkFinality() // Check all pending transactions for finality based on immutable tip
 }
 
 type confirmResult struct {
@@ -64,19 +66,23 @@ type cardanoTransactionConfirmer struct {
 	blockDepth      map[string]*pendingTransactionBlock // Track transactions waiting for finality (txHash -> block info)
 	securityParam   uint64                              // Number of blocks required for finality
 	activeSlotsCoeff float64                            // Active slots coefficient for finality depth calculation
-	currentTip      uint64                               // Current chain tip slot
+	currentHeight   uint64                               // Current chain height (block count)
+	slot2height     map[uint64]uint64                    // Map slot -> height for rollback handling
 	resubmitFunc    func(string, []byte) error           // Callback to resubmit transactions
+	immutableTipSlot uint64                              // Current immutable tip slot (for finality checking)
+	conn            *ouroboros.Connection                // Connection for querying immutable tip
 	lock            sync.Mutex
 }
 
 type pendingTransactionBlock struct {
-	txHash       string
-	blockSlot    uint64
-	blockHash    string
-	iact         core.Interaction
-	channel      chan confirmResult // Channel to notify when committed
-	isRecovery   bool               // True if this is tracking a transaction after rollback
-	rollbackSlot uint64             // Slot where rollback occurred (for recovery transactions)
+	txHash         string
+	inclusionHeight uint64         // Block height where transaction was included
+	inclusionSlot   uint64          // Block slot where transaction was included
+	inclusionHash   string          // Block hash where transaction was included
+	iact           core.Interaction
+	channel        chan confirmResult // Channel to notify when committed
+	isRecovery     bool               // True if this is tracking a transaction after rollback
+	rollbackHeight uint64             // Height where rollback occurred (for recovery transactions)
 }
 
 type committedTransaction struct {
@@ -101,21 +107,25 @@ type blockSubscriber struct {
 
 func newCardanoTransactionConfirmer(logger core.Logger, securityParam uint64, activeSlotsCoeff float64) *cardanoTransactionConfirmer {
 	return &cardanoTransactionConfirmer{
-		logger:          logger,
-		pendings:        make(map[string]*cardanoTransactionConfirmerPending),
-		committed:       make(map[string]*committedTransaction),
-		invalidated:     make(map[string]bool),
-		txCBOR:          make(map[string][]byte),
-		blockDepth:      make(map[string]*pendingTransactionBlock),
-		securityParam:   securityParam,
+		logger:           logger,
+		pendings:         make(map[string]*cardanoTransactionConfirmerPending),
+		committed:        make(map[string]*committedTransaction),
+		invalidated:      make(map[string]bool),
+		txCBOR:           make(map[string][]byte),
+		blockDepth:       make(map[string]*pendingTransactionBlock),
+		securityParam:    securityParam,
 		activeSlotsCoeff: activeSlotsCoeff,
-		currentTip:      0,
+		currentHeight:    0,
+		slot2height:      make(map[uint64]uint64),
+		immutableTipSlot: 0,
+		conn:             nil,
 	}
 }
 
-// getFinalityDepthThreshold returns the number of blocks required for finality: (3 * securityParam / activeSlotsCoeff)
+// getFinalityDepthThreshold returns the number of blocks required for finality: 3 * securityParam
+// Since we're tracking block heights directly, we use block count instead of slot gap
 func (c *cardanoTransactionConfirmer) getFinalityDepthThreshold() uint64 {
-	return uint64(3.0 * float64(c.securityParam) / c.activeSlotsCoeff)
+	return 3 * c.securityParam
 }
 
 func (c *cardanoTransactionConfirmer) prepare(
@@ -131,35 +141,32 @@ func (c *cardanoTransactionConfirmer) prepare(
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	// Check if transaction is already committed (deep enough)
+	// Check if transaction is already committed (finalized)
 	if _, ok := c.committed[txHash]; ok {
-		delete(c.committed, txHash)
 		iact.ReportCommit()
 		channel <- confirmResult{false, nil}
 		close(channel)
 		return pending, nil
 	}
 
-	// Check if transaction is already in blockDepth (found in a block but not deep enough yet)
+	// Check if transaction is already in blockDepth (found in a block but not finalized yet)
 	if blockPending, ok := c.blockDepth[txHash]; ok {
 		// Associate the interaction and channel with this pending transaction
 		blockPending.iact = iact
 		blockPending.channel = channel
 		
-		// Check if it's already deep enough
-		depth := c.currentTip - blockPending.blockSlot
-		finalityThreshold := c.getFinalityDepthThreshold()
-		if depth >= finalityThreshold {
-			// Already deep enough, commit immediately
+		// Check if it's already finalized (inclusion slot <= immutable tip slot)
+		if blockPending.inclusionSlot > 0 && blockPending.inclusionSlot <= c.immutableTipSlot {
+			// Already finalized, commit immediately
 			txCBOR := c.txCBOR[txHash]
 			c.commitTransactionFromPending(blockPending, txCBOR)
 			return pending, nil
 		}
 		
-		// Not deep enough yet, will be committed when depth is reached
+		// Not finalized yet, will be committed when immutable tip advances
 		// Channel is already stored in blockPending
-		c.logger.Debugf("Transaction %s associated with interaction, waiting for finality (depth: %d, required: %d)", 
-			txHash, depth, finalityThreshold)
+		c.logger.Debugf("Transaction %s associated with interaction, waiting for finality (inclusion slot: %d, immutable tip: %d)", 
+			txHash, blockPending.inclusionSlot, c.immutableTipSlot)
 		return pending, nil
 	}
 
@@ -186,7 +193,7 @@ func (p *cardanoTransactionConfirmerPending) confirm() confirmResult {
 	return result
 }
 
-func (c *cardanoTransactionConfirmer) reportTransaction(txHash string, blockSlot uint64, blockHash string) {
+func (c *cardanoTransactionConfirmer) reportTransaction(txHash string, inclusionHeight uint64, inclusionSlot uint64, blockHash string) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -196,31 +203,28 @@ func (c *cardanoTransactionConfirmer) reportTransaction(txHash string, blockSlot
 	// Check if this is a recovery transaction that was found again
 	if pending, ok := c.blockDepth[txHash]; ok && pending.isRecovery {
 		// Transaction was in recovery tracking and was found again
-		c.logger.Infof("Recovery transaction %s found again in block %d after rollback", txHash, blockSlot)
-		
 		// Update with the new block information
-		pending.blockSlot = blockSlot
-		pending.blockHash = blockHash
+		pending.inclusionHeight = inclusionHeight
+		pending.inclusionSlot = inclusionSlot
+		pending.inclusionHash = blockHash
 		
 		// Clear invalidated flag since we found it again
 		delete(c.invalidated, txHash)
 		
-		// Check if it's already deep enough
-		depth := c.currentTip - blockSlot
-		finalityThreshold := c.getFinalityDepthThreshold()
-		if depth >= finalityThreshold {
-			// Already deep enough, commit immediately
-			c.commitTransaction(txHash, blockSlot, blockHash, pending.iact, txCBOR)
+		// Check if it's already finalized (inclusion slot <= immutable tip slot)
+		if inclusionSlot > 0 && inclusionSlot <= c.immutableTipSlot {
+			// Already finalized, commit immediately
+			c.commitTransaction(txHash, inclusionSlot, blockHash, pending.iact, txCBOR)
 			delete(c.blockDepth, txHash)
 			return
 		}
 		
 		// Remove recovery flag and track normally for finality
 		pending.isRecovery = false
-		pending.rollbackSlot = 0
+		pending.rollbackHeight = 0
 		
-		c.logger.Debugf("Transaction %s found again in block %d, waiting for finality (current depth: %d, required: %d)", 
-			txHash, blockSlot, depth, finalityThreshold)
+		c.logger.Debugf("Recovery transaction %s found again in block %d (height %d), waiting for finality (inclusion slot: %d, immutable tip: %d)", 
+			txHash, inclusionSlot, inclusionHeight, inclusionSlot, c.immutableTipSlot)
 		return
 	}
 
@@ -230,27 +234,26 @@ func (c *cardanoTransactionConfirmer) reportTransaction(txHash string, blockSlot
 		
 		// Store transaction in blockDepth map to wait for finality
 		c.blockDepth[txHash] = &pendingTransactionBlock{
-			txHash:     txHash,
-			blockSlot:  blockSlot,
-			blockHash:  blockHash,
-			iact:       pending.iact,
-			channel:    pending.channel, // Store channel for notification
-			isRecovery: false,
+			txHash:         txHash,
+			inclusionHeight: inclusionHeight,
+			inclusionSlot:   inclusionSlot,
+			inclusionHash:   blockHash,
+			iact:           pending.iact,
+			channel:        pending.channel, // Store channel for notification
+			isRecovery:     false,
 		}
 		
-		// Check if this block is already deep enough (shouldn't happen normally, but possible)
-		depth := c.currentTip - blockSlot
-		finalityThreshold := c.getFinalityDepthThreshold()
-		if depth >= finalityThreshold {
-			// Already deep enough, commit immediately
-			c.commitTransaction(txHash, blockSlot, blockHash, pending.iact, txCBOR)
+		// Check if this block is already finalized (inclusion slot <= immutable tip slot)
+		if inclusionSlot > 0 && inclusionSlot <= c.immutableTipSlot {
+			// Already finalized, commit immediately
+			c.commitTransaction(txHash, inclusionSlot, blockHash, pending.iact, txCBOR)
 			pending.channel <- confirmResult{false, nil}
 			close(pending.channel)
 		} else {
-			// Not deep enough yet, will be committed when depth is reached
+			// Not finalized yet, will be committed when immutable tip advances
 			// Channel is stored in blockDepth for later notification
-			c.logger.Debugf("Transaction %s found in block %d, waiting for finality (current depth: %d, required: %d)", 
-				txHash, blockSlot, depth, finalityThreshold)
+			c.logger.Debugf("Transaction %s found in block %d (height %d), waiting for finality (inclusion slot: %d, immutable tip: %d)", 
+				txHash, inclusionSlot, inclusionHeight, inclusionSlot, c.immutableTipSlot)
 		}
 		return
 	}
@@ -259,48 +262,59 @@ func (c *cardanoTransactionConfirmer) reportTransaction(txHash string, blockSlot
 	if _, exists := c.blockDepth[txHash]; !exists {
 		// Add to blockDepth for future finality check (we'll have interaction reference later)
 		c.blockDepth[txHash] = &pendingTransactionBlock{
-			txHash:     txHash,
-			blockSlot:  blockSlot,
-			blockHash:  blockHash,
-			iact:       nil,    // No interaction reference yet
-			channel:    nil,    // No channel yet
-			isRecovery: false,
+			txHash:         txHash,
+			inclusionHeight: inclusionHeight,
+			inclusionSlot:   inclusionSlot,
+			inclusionHash:   blockHash,
+			iact:           nil,    // No interaction reference yet
+			channel:        nil,    // No channel yet
+			isRecovery:     false,
 		}
-		c.logger.Tracef("Transaction %s found in block %d, waiting for interaction reference", txHash, blockSlot)
+		c.logger.Tracef("Transaction %s found in block %d (height %d), waiting for interaction reference", txHash, inclusionSlot, inclusionHeight)
 	}
 	
-	// Check depth immediately in case it's already deep enough
-	depth := c.currentTip - blockSlot
-	finalityThreshold := c.getFinalityDepthThreshold()
-	if depth >= finalityThreshold {
-		c.checkAndCommitDeepTransactions()
+	// Check finality immediately in case it's already finalized
+	if inclusionSlot > 0 && inclusionSlot <= c.immutableTipSlot {
+		c.checkFinality()
 	}
 }
 
-// commitTransaction commits a transaction that has reached finality depth
-func (c *cardanoTransactionConfirmer) commitTransaction(txHash string, blockSlot uint64, blockHash string, iact core.Interaction, txCBOR []byte) {
+// commitTransaction commits a transaction that has reached finality (inclusion slot <= immutable tip slot)
+// Note: This function does NOT acquire the lock - caller must hold it
+func (c *cardanoTransactionConfirmer) commitTransaction(txHash string, inclusionSlot uint64, blockHash string, iact core.Interaction, txCBOR []byte) {
+	// Report commit before acquiring lock (to avoid holding lock during callback)
 	if iact != nil {
 		iact.ReportCommit()
+	}
+	
+	// Get inclusion height from pending block if available
+	var inclusionHeight uint64
+	if pending, ok := c.blockDepth[txHash]; ok {
+		inclusionHeight = pending.inclusionHeight
 	}
 	
 	// Store committed transaction with block info and CBOR
 	c.committed[txHash] = &committedTransaction{
 		interaction: iact,
-		blockSlot:   blockSlot,
+		blockSlot:   inclusionSlot,
 		blockHash:   blockHash,
 		txCBOR:      txCBOR,
 	}
 	
-	// Remove from blockDepth
+	// Remove from blockDepth (if still there)
 	delete(c.blockDepth, txHash)
 	
-	c.logger.Debugf("Transaction %s committed (block %d is %d blocks deep)", txHash, blockSlot, c.currentTip-blockSlot)
+	if inclusionHeight > 0 {
+		c.logger.Debugf("Transaction %s committed (block %d at height %d, immutable tip: %d)", txHash, inclusionSlot, inclusionHeight, c.immutableTipSlot)
+	} else {
+		c.logger.Debugf("Transaction %s committed (block %d, immutable tip: %d)", txHash, inclusionSlot, c.immutableTipSlot)
+	}
 }
 
 // commitTransactionFromPending commits a transaction from pendingTransactionBlock and notifies channel
 func (c *cardanoTransactionConfirmer) commitTransactionFromPending(pending *pendingTransactionBlock, txCBOR []byte) {
 	// Commit the transaction
-	c.commitTransaction(pending.txHash, pending.blockSlot, pending.blockHash, pending.iact, txCBOR)
+	c.commitTransaction(pending.txHash, pending.inclusionSlot, pending.inclusionHash, pending.iact, txCBOR)
 	
 	// Notify channel if it exists
 	if pending.channel != nil {
@@ -314,46 +328,11 @@ func (c *cardanoTransactionConfirmer) commitTransactionFromPending(pending *pend
 	}
 }
 
-// checkAndCommitDeepTransactions checks all pending transactions and commits those that are deep enough
-func (c *cardanoTransactionConfirmer) checkAndCommitDeepTransactions() {
-	var toCommit []*pendingTransactionBlock
-	
-	// First pass: identify transactions to commit (skip recovery transactions)
-	finalityThreshold := c.getFinalityDepthThreshold()
-	for txHash, pending := range c.blockDepth {
-		if pending.isRecovery {
-			// Skip recovery transactions - handled by checkRecoveryTransactions
-			continue
-		}
-		
-		depth := c.currentTip - pending.blockSlot
-		if depth >= finalityThreshold {
-			// This transaction's block is deep enough, prepare to commit it
-			pendingCopy := *pending
-			pendingCopy.txHash = txHash // Ensure txHash is set
-			toCommit = append(toCommit, &pendingCopy)
-			
-			// Remove from blockDepth immediately to avoid double-processing
-			delete(c.blockDepth, txHash)
-		}
-	}
-	
-	// Second pass: commit transactions (outside of lock iteration)
-	for _, pending := range toCommit {
-		txCBOR := c.txCBOR[pending.txHash]
-		c.commitTransactionFromPending(pending, txCBOR)
-	}
-	
-	// Check recovery transactions after checking normal finality
-	c.checkRecoveryTransactions()
-}
 
 // checkRecoveryTransactions checks recovery transactions and resubmits if not found after securityParam blocks
 func (c *cardanoTransactionConfirmer) checkRecoveryTransactions() {
-	if c.resubmitFunc == nil {
-		// Can't resubmit without callback
-		return
-	}
+	// TEMPORARILY DISABLED: Resubmission disabled
+	const resubmissionEnabled = false
 	
 	type resubmitInfo struct {
 		txHash string
@@ -367,50 +346,55 @@ func (c *cardanoTransactionConfirmer) checkRecoveryTransactions() {
 			continue
 		}
 		
-		// If transaction was found again (blockSlot > 0), handle it normally
-		if pending.blockSlot > 0 {
+		// If transaction was found again (inclusionHeight > 0), handle it normally
+		if pending.inclusionHeight > 0 {
 			// Transaction was found again after rollback
 			// Remove recovery flag and track normally for finality
 			pending.isRecovery = false
-			pending.rollbackSlot = 0
+			pending.rollbackHeight = 0
 			
 			// Clear invalidated flag since we found it again
 			delete(c.invalidated, txHash)
 			
-			c.logger.Infof("Transaction %s found again after rollback in block %d, tracking for finality", txHash, pending.blockSlot)
-			
-			// Check if it's already deep enough
-			depth := c.currentTip - pending.blockSlot
-			finalityThreshold := c.getFinalityDepthThreshold()
-			if depth >= finalityThreshold {
-				// Already deep enough, commit immediately
+			// Check if it's already finalized (inclusion slot <= immutable tip slot)
+			if pending.inclusionSlot > 0 && pending.inclusionSlot <= c.immutableTipSlot {
+				// Already finalized, commit immediately
 				txCBOR := c.txCBOR[txHash]
 				c.commitTransactionFromPending(pending, txCBOR)
 				delete(c.blockDepth, txHash)
+			} else {
+				c.logger.Debugf("Recovery transaction %s found again in block %d (height %d), tracking for finality (inclusion slot: %d, immutable tip: %d)", 
+					txHash, pending.inclusionSlot, pending.inclusionHeight, pending.inclusionSlot, c.immutableTipSlot)
 			}
 			continue
 		}
 		
 		// Transaction hasn't been found yet - check if enough blocks have passed since rollback
-		blocksSinceRollback := c.currentTip - pending.rollbackSlot
+		blocksSinceRollback := c.currentHeight - pending.rollbackHeight
 		if blocksSinceRollback >= c.securityParam {
-			// Transaction not found after securityParam blocks - resubmit it
-			txCBOR := c.txCBOR[txHash]
-			if len(txCBOR) > 0 {
-				toResubmit = append(toResubmit, resubmitInfo{txHash: txHash, txCBOR: txCBOR})
-				c.logger.Warnf("Transaction %s not found after %d blocks since rollback - will resubmit", 
-					txHash, blocksSinceRollback)
+			if resubmissionEnabled && c.resubmitFunc != nil {
+				// Transaction not found after securityParam blocks - resubmit it
+				txCBOR := c.txCBOR[txHash]
+				if len(txCBOR) > 0 {
+					toResubmit = append(toResubmit, resubmitInfo{txHash: txHash, txCBOR: txCBOR})
+					c.logger.Warnf("Transaction %s not found after %d blocks since rollback - will resubmit", 
+						txHash, blocksSinceRollback)
+				} else {
+					c.logger.Warnf("Transaction %s not found after %d blocks since rollback but no CBOR available - cannot resubmit", 
+						txHash, blocksSinceRollback)
+					// Remove from recovery tracking
+					delete(c.blockDepth, txHash)
+				}
 			} else {
-				c.logger.Warnf("Transaction %s not found after %d blocks since rollback but no CBOR available - cannot resubmit", 
+				// TEMPORARILY DISABLED: Resubmission disabled - just log warning
+				c.logger.Warnf("Transaction %s not found after %d blocks since rollback - resubmission disabled", 
 					txHash, blocksSinceRollback)
-				// Remove from recovery tracking
-				delete(c.blockDepth, txHash)
 			}
 		}
 	}
 	
-	// If no transactions to resubmit, return early (lock already held)
-	if len(toResubmit) == 0 {
+	// TEMPORARILY DISABLED: Skip resubmission
+	if !resubmissionEnabled || len(toResubmit) == 0 {
 		return
 	}
 	
@@ -432,13 +416,14 @@ func (c *cardanoTransactionConfirmer) checkRecoveryTransactions() {
 			// Re-add to recovery tracking for another attempt later
 			c.lock.Lock()
 			c.blockDepth[info.txHash] = &pendingTransactionBlock{
-				txHash:       info.txHash,
-				blockSlot:    0,
-				blockHash:    "",
-				iact:         nil,
-				channel:      nil,
-				isRecovery:   true,
-				rollbackSlot: c.currentTip, // Use current tip as new rollback point
+				txHash:         info.txHash,
+				inclusionHeight: 0,
+				inclusionSlot:   0,
+				inclusionHash:   "",
+				iact:           nil,
+				channel:        nil,
+				isRecovery:     true,
+				rollbackHeight: c.currentHeight, // Use current height as new rollback point
 			}
 			c.invalidated[info.txHash] = true
 			c.lock.Unlock()
@@ -451,15 +436,17 @@ func (c *cardanoTransactionConfirmer) checkRecoveryTransactions() {
 	c.lock.Lock()
 }
 
-// updateTip updates the current chain tip and checks for finality
-func (c *cardanoTransactionConfirmer) updateTip(newTip uint64) {
+// updateHeight increments the current chain height (for tracking purposes)
+func (c *cardanoTransactionConfirmer) updateHeight(blockSlot uint64) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	
-	if newTip > c.currentTip {
-		c.currentTip = newTip
-		c.checkAndCommitDeepTransactions()
-	}
+	// Increment height for new block
+	h := c.currentHeight + 1
+	c.slot2height[blockSlot] = h
+	c.currentHeight = h
+	
+	// Note: Finality checking is now done via immutable tip, not block depth
 }
 
 func (c *cardanoTransactionConfirmer) storeTxCBOR(txHash string, txCBOR []byte) {
@@ -468,35 +455,128 @@ func (c *cardanoTransactionConfirmer) storeTxCBOR(txHash string, txCBOR []byte) 
 	c.txCBOR[txHash] = txCBOR
 }
 
-func (c *cardanoTransactionConfirmer) resubmitInvalidatedTx(txHash string, txCBOR []byte) error {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	
-	// Store the CBOR for potential future resubmission
-	c.txCBOR[txHash] = txCBOR
-	
-	// Mark as invalidated
-	c.invalidated[txHash] = true
-	
-	c.logger.Infof("Transaction %s marked for resubmission due to rollback", txHash)
-	return nil
-}
-
 func (c *cardanoTransactionConfirmer) setResubmitFunc(fn func(string, []byte) error) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.resubmitFunc = fn
 }
 
+func (c *cardanoTransactionConfirmer) setConnection(conn *ouroboros.Connection) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.conn = conn
+}
+
+// updateImmutableTip queries the immutable tip from the node using LocalStateQuery
+func (c *cardanoTransactionConfirmer) updateImmutableTip() error {
+	c.lock.Lock()
+	conn := c.conn
+	c.lock.Unlock()
+	
+	if conn == nil {
+		return fmt.Errorf("connection not set")
+	}
+	
+	lsq := conn.LocalStateQuery().Client
+	
+	// Acquire the immutable tip snapshot
+	if err := lsq.AcquireImmutableTip(); err != nil {
+		return fmt.Errorf("failed to acquire immutable tip: %w", err)
+	}
+	defer lsq.Release()
+	
+	// Get the immutable tip point
+	pt, err := lsq.GetChainPoint()
+	if err != nil {
+		return fmt.Errorf("failed to get chain point: %w", err)
+	}
+	
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	
+	oldTip := c.immutableTipSlot
+	c.immutableTipSlot = pt.Slot
+	
+	if oldTip != c.immutableTipSlot {
+		c.logger.Debugf("Immutable tip updated: slot %d -> %d", oldTip, c.immutableTipSlot)
+		// Check for finality when immutable tip updates
+		c.checkFinality()
+	}
+	
+	return nil
+}
+
+// checkFinality checks all pending transactions and commits those that are finalized (inclusion slot <= immutable tip slot)
+func (c *cardanoTransactionConfirmer) checkFinality() {
+	if c.immutableTipSlot == 0 {
+		// Immutable tip not yet queried, skip
+		return
+	}
+	
+	var toCommit []*pendingTransactionBlock
+	
+	// First pass: identify transactions to commit (skip recovery transactions)
+	for txHash, pending := range c.blockDepth {
+		if pending.isRecovery {
+			// Skip recovery transactions - handled by checkRecoveryTransactions
+			continue
+		}
+		
+		// Transaction is finalized if its inclusion slot <= immutable tip slot
+		if pending.inclusionSlot > 0 && pending.inclusionSlot <= c.immutableTipSlot {
+			// This transaction's block is finalized, prepare to commit it
+			pendingCopy := *pending
+			pendingCopy.txHash = txHash // Ensure txHash is set
+			toCommit = append(toCommit, &pendingCopy)
+			
+			// Remove from blockDepth immediately to avoid double-processing
+			delete(c.blockDepth, txHash)
+		}
+	}
+	
+	// Second pass: commit transactions (outside of lock iteration)
+	for _, pending := range toCommit {
+		txCBOR := c.txCBOR[pending.txHash]
+		c.commitTransactionFromPending(pending, txCBOR)
+	}
+	
+	// Check recovery transactions after checking normal finality
+	c.checkRecoveryTransactions()
+}
+
 func (c *cardanoTransactionConfirmer) handleRollback(rollbackSlot uint64) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
+	
+	// Get rollback height from slot2height map
+	rollbackHeight, hasHeight := c.slot2height[rollbackSlot]
+	if !hasHeight {
+		c.logger.Warnf("Rollback to slot %d but no height mapping found - using current height", rollbackSlot)
+		rollbackHeight = c.currentHeight
+	}
+	
+	// Update current height to the rollback point
+	c.currentHeight = rollbackHeight
+	
+	// Delete all slot->height mappings for slots greater than rollback slot
+	var slotsToDelete []uint64
+	for slot := range c.slot2height {
+		if slot > rollbackSlot {
+			slotsToDelete = append(slotsToDelete, slot)
+		}
+	}
+	for _, slot := range slotsToDelete {
+		delete(c.slot2height, slot)
+	}
 	
 	invalidatedCount := 0
 	var invalidatedTxs []string
 	
 	// Check all committed transactions to see if they were in rolled-back blocks
 	for txHash, committedTx := range c.committed {
+		// Get the height for this transaction's slot (if we have it)
+		// Since we don't store inclusionHeight in committedTransaction, we need to check by slot
+		// For now, we'll check if the slot is >= rollback slot
 		if committedTx.blockSlot >= rollbackSlot {
 			// This transaction was in a block that was rolled back
 			invalidatedCount++
@@ -509,36 +589,39 @@ func (c *cardanoTransactionConfirmer) handleRollback(rollbackSlot uint64) {
 			
 			// If we have the interaction reference, we can report an error
 			if committedTx.interaction != nil {
-				c.logger.Warnf("Transaction %s was in rolled-back block %d (rollback to slot %d) - tracking for recovery", 
-					txHash, committedTx.blockSlot, rollbackSlot)
+				c.logger.Warnf("Transaction %s was in rolled-back block %d - tracking for recovery", 
+					txHash, committedTx.blockSlot)
 			}
 			
 			// Add to recovery tracking instead of just marking as invalidated
 			// This will check if the transaction appears again in subsequent blocks
 			c.blockDepth[txHash] = &pendingTransactionBlock{
-				txHash:       txHash,
-				blockSlot:    0, // Will be set when found in a block
-				blockHash:    "",
-				iact:         committedTx.interaction,
-				channel:      nil, // No channel for recovery tracking
-				isRecovery:   true,
-				rollbackSlot: rollbackSlot,
+				txHash:         txHash,
+				inclusionHeight: 0, // Will be set when found again
+				inclusionSlot:   0,  // Will be set when found again
+				inclusionHash:   "",
+				iact:           committedTx.interaction,
+				channel:        nil, // No channel for recovery tracking
+				isRecovery:     true,
+				rollbackHeight: rollbackHeight,
 			}
 			
 			// Mark as invalidated for now (will be cleared if found again)
 			c.invalidated[txHash] = true
 			delete(c.committed, txHash)
-			
-			c.logger.Infof("Transaction %s added to recovery tracking after rollback", txHash)
 		}
 	}
 	
 	// Check all pending transactions waiting for finality (in blockDepth)
 	for txHash, pending := range c.blockDepth {
-		if pending.blockSlot >= rollbackSlot {
+		if pending.inclusionSlot >= rollbackSlot {
 			// This transaction was in a block that was rolled back
 			invalidatedCount++
 			invalidatedTxs = append(invalidatedTxs, txHash)
+			
+			// Store original values for logging before resetting
+			originalSlot := pending.inclusionSlot
+			originalHeight := pending.inclusionHeight
 			
 			// Store CBOR for resubmission if available
 			txCBOR := c.txCBOR[txHash]
@@ -546,33 +629,26 @@ func (c *cardanoTransactionConfirmer) handleRollback(rollbackSlot uint64) {
 				c.txCBOR[txHash] = txCBOR
 			}
 			
-			// If we have the interaction reference, log a warning
-			if pending.iact != nil {
-				c.logger.Warnf("Transaction %s waiting for finality was in rolled-back block %d (rollback to slot %d) - tracking for recovery", 
-					txHash, pending.blockSlot, rollbackSlot)
-			}
-			
 			// Convert to recovery tracking
-			pending.blockSlot = 0     // Reset - will be set when found again
-			pending.blockHash = ""     // Reset
+			pending.inclusionHeight = 0 // Reset - will be set when found again
+			pending.inclusionSlot = 0   // Reset - will be set when found again
+			pending.inclusionHash = ""  // Reset
 			pending.isRecovery = true
-			pending.rollbackSlot = rollbackSlot
+			pending.rollbackHeight = rollbackHeight
 			
 			// Mark as invalidated for now (will be cleared if found again)
 			c.invalidated[txHash] = true
 			
-			c.logger.Infof("Transaction %s added to recovery tracking after rollback", txHash)
+			if pending.iact != nil {
+				c.logger.Warnf("Transaction %s in rolled-back block %d (height %d) - tracking for recovery", 
+					txHash, originalSlot, originalHeight)
+			}
 		}
-	}
-	
-	// Update current tip to the rollback point (blocks behind this were rolled back)
-	if rollbackSlot < c.currentTip {
-		c.currentTip = rollbackSlot
 	}
 	
 	if invalidatedCount > 0 {
 		c.logger.Warnf("Chain rollback invalidated %d transactions (tracking for recovery): %v", invalidatedCount, invalidatedTxs)
-		// Check recovery transactions after updating tip
+		// Check recovery transactions after updating height
 		c.checkRecoveryTransactions()
 	}
 }
@@ -587,17 +663,6 @@ func newBlockSubscriber(logger core.Logger, conn *ouroboros.Connection, confirme
 }
 
 func (bs *blockSubscriber) start() error {
-	// Create error channel for async errors
-	errorChan := make(chan error, 10)
-
-	// Start goroutine to handle connection errors
-	go func() {
-		for err := range errorChan {
-			bs.logger.Errorf("Connection error: %v", err)
-			os.Exit(1)
-		}
-	}()
-
 	// Get current tip
 	tip, err := bs.conn.ChainSync().Client.GetCurrentTip()
 	if err != nil {
@@ -640,23 +705,34 @@ func (bs *blockSubscriber) handleNewBlock(
 		return nil
 	}
 
-	// Update the current tip (from the tip parameter)
+	// Update height tracking for this block
 	confirmer := bs.confirmer.(*cardanoTransactionConfirmer)
-	confirmer.updateTip(tip.Point.Slot)
+	blockSlot := block.SlotNumber()
+	confirmer.updateHeight(blockSlot)
 
 	transactions := block.Transactions()
 	if len(transactions) == 0 {
 		return nil
 	}
 
+	// Get current height for inclusion height (after updateHeight)
+	confirmer.lock.Lock()
+	inclusionHeight := confirmer.currentHeight
+	confirmer.lock.Unlock()
+
 	// Process each transaction in the block
-	blockSlot := block.SlotNumber()
 	blockHash := hex.EncodeToString(block.Hash().Bytes())
 	
 	for _, tx := range transactions {
 		txHash := tx.Hash().String()
-		bs.logger.Tracef("Found transaction %s in block %d (%s)", txHash, blockSlot, blockHash)
-		bs.confirmer.reportTransaction(txHash, blockSlot, blockHash)
+		bs.logger.Tracef("Found transaction %s in block %d (height %d, hash %s)", txHash, blockSlot, inclusionHeight, blockHash)
+		bs.confirmer.reportTransaction(txHash, inclusionHeight, blockSlot, blockHash)
+	}
+
+	// Query immutable tip after processing transactions to check for finality
+	if err := bs.confirmer.updateImmutableTip(); err != nil {
+		bs.logger.Warnf("Failed to query immutable tip: %v", err)
+		// Don't return error, continue processing
 	}
 
 	return nil
@@ -672,6 +748,12 @@ func (bs *blockSubscriber) handleRollback(
 	// Get the confirmer to check for invalidated transactions
 	confirmer := bs.confirmer.(*cardanoTransactionConfirmer)
 	confirmer.handleRollback(point.Slot)
+	
+	// Query immutable tip after rollback to check for finality
+	if err := bs.confirmer.updateImmutableTip(); err != nil {
+		bs.logger.Warnf("Failed to query immutable tip after rollback: %v", err)
+		// Don't return error, continue processing
+	}
 	
 	return nil
 }
@@ -817,12 +899,90 @@ func extractActiveSlotsCoeff(genesisConfig interface{}) (float64, error) {
 	}
 }
 
+// printProtocolParameters prints the protocol parameters using reflection
+func printProtocolParameters(logger core.Logger, protocolParams interface{}) {
+	if protocolParams == nil {
+		logger.Warnf("Protocol parameters are nil")
+		return
+	}
+
+	// Use reflection to access struct fields
+	v := reflect.ValueOf(protocolParams)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+
+	logger.Infof("=== Protocol Parameters ===")
+	
+	// Helper function to safely get and print field values
+	printField := func(fieldName string) {
+		field := v.FieldByName(fieldName)
+		if !field.IsValid() {
+			logger.Infof("  %s: (not found)", fieldName)
+			return
+		}
+
+		// Handle ActiveSlotsCoeff which appears to be a slice representing a rational number
+		if fieldName == "ActiveSlotsCoeff" && field.Kind() == reflect.Slice {
+			if field.Len() == 2 {
+				num := field.Index(0).Interface()
+				den := field.Index(1).Interface()
+				// Try to convert to float for display
+				if numFloat, ok := convertToFloat64(num); ok {
+					if denFloat, ok := convertToFloat64(den); ok && denFloat != 0 {
+						result := numFloat / denFloat
+						logger.Infof("  %s: %v (%.6f)", fieldName, field.Interface(), result)
+						return
+					}
+				}
+				logger.Infof("  %s: %v", fieldName, field.Interface())
+				return
+			}
+		}
+
+		// Handle SlotLength which is likely in microseconds
+		if fieldName == "SlotLength" {
+			logger.Infof("  %s: %v", fieldName, field.Interface())
+			if field.Kind() == reflect.Uint64 || field.Kind() == reflect.Int64 || field.Kind() == reflect.Int {
+				// Assume it's in microseconds, convert to seconds
+				var microsec int64
+				switch field.Kind() {
+				case reflect.Uint64:
+					microsec = int64(field.Uint())
+				case reflect.Int64, reflect.Int:
+					microsec = field.Int()
+				}
+				if microsec > 0 {
+					seconds := float64(microsec) / 1000000.0
+					logger.Infof("    (%d microseconds = %.6f seconds)", microsec, seconds)
+				}
+			}
+			return
+		}
+
+		logger.Infof("  %s: %v", fieldName, field.Interface())
+	}
+
+	// Print key protocol parameters
+	printField("ActiveSlotsCoeff")
+	printField("SecurityParam")
+	printField("EpochLength")
+	printField("SlotLength")
+	printField("SlotsPerKESPeriod")
+	printField("MaxBlockBodySize")
+	printField("MaxBlockHeaderSize")
+	printField("MaxTxSize")
+	
+	logger.Infof("==========================")
+}
+
 // calculateFinalityTime calculates the transaction finality time based on protocol parameters
+// NOTE: This is informational/metrics only. Actual finality is determined by immutable tip checking.
 func calculateFinalityTime(protocolParams interface{}) time.Duration {
 	// Default values (mainnet-like)
 	activeSlotsCoeff := 0.05
-	slotLength := 20 * time.Second
-	securityParam := uint64(2160)
+	slotLength := time.Duration(0.2 * float64(time.Second))
+	securityParam := uint64(12)
 	
 	// Try to extract actual values from protocol parameters
 	if _, ok := protocolParams.(*conway.ConwayProtocolParameters); ok {
@@ -833,7 +993,7 @@ func calculateFinalityTime(protocolParams interface{}) time.Duration {
 	}
 	
 	// Calculate finality time: (3 * securityParam / activeSlotsCoeff) * slotLength
-	finalityTime := time.Duration(float64(3.0 * float64(securityParam) / activeSlotsCoeff) * float64(slotLength))
+	finalityTime := time.Duration(float64(3.0*float64(securityParam)/activeSlotsCoeff) * float64(slotLength.Nanoseconds())) * time.Nanosecond
 	
 	return finalityTime
 }
@@ -878,6 +1038,9 @@ func NewBlockchainClient(logger core.Logger, socketPath string) (*BlockchainClie
 	}
 
 	subscriber.conn = oConn
+	
+	// Set connection in confirmer for immutable tip querying
+	confirmer.setConnection(oConn)
 
 	// Query genesis config to get SecurityParam and ActiveSlotsCoeff (like main.go does)
 	logger.Debugf("Querying genesis config for SecurityParam and ActiveSlotsCoeff...")
@@ -920,6 +1083,8 @@ func NewBlockchainClient(logger core.Logger, socketPath string) (*BlockchainClie
 		logger.Warnf("Failed to query protocol parameters, using default finality time: %v", err)
 		finalityTime = calculateFinalityTime(nil)
 	} else {
+		// Print protocol parameters
+		printProtocolParameters(logger, protocolParams)
 		finalityTime = calculateFinalityTime(protocolParams)
 		logger.Infof("Calculated finality time: %v", finalityTime)
 	}
@@ -927,6 +1092,13 @@ func NewBlockchainClient(logger core.Logger, socketPath string) (*BlockchainClie
 	// Start the block subscriber
 	if err := subscriber.start(); err != nil {
 		return nil, fmt.Errorf("failed to start block subscriber: %w", err)
+	}
+	
+	// Query immutable tip initially to establish baseline
+	logger.Debugf("Querying immutable tip for initial finality check...")
+	if err := confirmer.updateImmutableTip(); err != nil {
+		logger.Warnf("Failed to query initial immutable tip: %v", err)
+		// Don't fail initialization, continue without immutable tip initially
 	}
 
 	// Start goroutine to handle connection errors
@@ -1148,6 +1320,7 @@ func (c *BlockchainClient) resubmitTransaction(txHash string, txBytes []byte) er
 }
 
 // WaitForFinality waits for the finality period after the last transaction was confirmed
+// NOTE: This is informational/metrics only. Actual finality is determined by immutable tip checking.
 func (c *BlockchainClient) WaitForFinality() error {
 	c.finalityMutex.Lock()
 	lastConfirmed := c.lastConfirmedTx
