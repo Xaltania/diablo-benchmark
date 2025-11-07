@@ -74,6 +74,7 @@ type runtime struct {
 	start        time.Time
 	lastSkewWarn time.Time
 	interactions []*runtimeInteraction
+	duration     float64 // Store experiment duration for timeout calculation
 
 	lock          sync.Mutex
 	lastDelayWarn time.Time
@@ -133,6 +134,7 @@ func (this *runtime) run() error {
 	}
 
 	Infof("run benchmark for %.3f seconds", msg.duration)
+	this.duration = msg.duration
 	this.start = time.Now()
 	this.lastSkewWarn = this.start
 	this.lastDelayWarn = this.start
@@ -168,8 +170,57 @@ func (this *runtime) stop() error {
 	var elapsed time.Duration
 	var err error
 	var i, n int
+	var allCommitted bool
+	var committedCount, totalCount int
+	var waitStart time.Time
+	var maxWaitTime time.Duration
+	var ticker *time.Ticker
 
 	n = len(this.interactions)
+
+	// Wait for all transactions to be committed, with a timeout of 2x the experiment duration
+	waitStart = time.Now()
+	maxWaitTime = time.Duration(2.0 * this.duration * float64(time.Second))
+	ticker = time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	Infof("waiting for all transactions to be committed (timeout: %v)", maxWaitTime)
+
+	for {
+		// Check if all transactions are committed or aborted
+		allCommitted = true
+		committedCount = 0
+		totalCount = 0
+
+		for _, interaction = range this.interactions {
+			interaction.lock.Lock()
+			totalCount++
+			// A transaction is considered "finalized" if it's committed or aborted
+			if !interaction.committed && !interaction.aborted {
+				allCommitted = false
+			}
+			if interaction.committed {
+				committedCount++
+			}
+			interaction.lock.Unlock()
+		}
+
+		if allCommitted {
+			Infof("all %d transactions committed or aborted (committed: %d)", totalCount, committedCount)
+			break
+		}
+
+		// Check if timeout has been reached
+		if time.Since(waitStart) >= maxWaitTime {
+			Warnf("timeout reached (%v) - %d/%d transactions committed or aborted, sending results anyway", 
+				maxWaitTime, committedCount, totalCount)
+			break
+		}
+
+		// Wait for next tick
+		<-ticker.C
+		Debugf("waiting for transactions: %d/%d committed or aborted", committedCount, totalCount)
+	}
 
 	Debugf("send %d results to primary", n)
 
