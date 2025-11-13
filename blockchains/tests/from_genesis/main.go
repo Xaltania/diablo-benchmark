@@ -123,11 +123,14 @@ func handleNewBlock(ctx chainsync.CallbackContext, blockType uint, blockData any
 
 	// Check if we've reached the tip (slot matches and hash matches)
 	if slot == tip.Point.Slot && len(tip.Point.Hash) > 0 && bytes.Equal(blockHash, tip.Point.Hash) {
+		log.Printf("Reached chain tip at slot %d, exiting immediately...", slot)
 		// Signal that we've reached the tip (non-blocking)
 		select {
 		case reachedTipChan <- struct{}{}:
 		default:
 		}
+		// Return immediately to stop processing more blocks
+		return nil
 	}
 
 	return nil

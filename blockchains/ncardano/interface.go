@@ -66,16 +66,15 @@ func (this *BlockchainInterface) Builder(params map[string]string, env []string,
 func (i *BlockchainInterface) Client(params map[string]string, env, view []string, logger core.Logger) (core.BlockchainClient, error) {
 	logger.Tracef("new client")
 
-	// For Cardano, we expect the first view to be the socket path
+	// For Cardano, we expect view to contain socket paths
 	if len(view) == 0 {
 		return nil, fmt.Errorf("no socket path provided")
 	}
 
-	socketPath := view[0]
-	logger.Tracef("using socket path: %s", socketPath)
+	logger.Tracef("using socket paths: %v", view)
 
 	// Create the Cardano client
-	client, err := NewBlockchainClient(logger, socketPath)
+	client, err := NewBlockchainClient(logger, view)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Cardano client: %w", err)
 	}

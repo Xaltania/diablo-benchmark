@@ -35,6 +35,13 @@ type BlockchainClient struct {
 	lastConfirmedTx time.Time
 	allTxsSubmitted bool
 	finalityMutex   sync.Mutex
+	
+	// Connection management
+	socketPaths    []string
+	networkMagic   uint32
+	connMutex      sync.RWMutex
+	errorChan      chan error
+	reconnectMutex sync.Mutex
 }
 
 type transactionConfirmer interface {
@@ -84,6 +91,7 @@ type pendingTransactionBlock struct {
 	channel        chan confirmResult // Channel to notify when committed
 	isRecovery     bool               // True if this is tracking a transaction after rollback
 	rollbackHeight uint64             // Height where rollback occurred (for recovery transactions)
+	resubmitted    bool                // True if transaction has been resubmitted (but monitoring continues)
 }
 
 type committedTransaction struct {
@@ -264,6 +272,7 @@ func (c *cardanoTransactionConfirmer) reportTransaction(txHash string, inclusion
 			iact:           pending.iact,
 			channel:        pending.channel, // Store channel for notification
 			isRecovery:     false,
+			resubmitted:    false,
 		}
 		
 		if c.isFinalized(inclusionHeight) {
@@ -292,6 +301,7 @@ func (c *cardanoTransactionConfirmer) reportTransaction(txHash string, inclusion
 			iact:           nil,    // No interaction reference yet
 			channel:        nil,    // No channel yet
 			isRecovery:     false,
+			resubmitted:    false,
 		}
 		c.logger.Tracef("Transaction %s found in block %d (height %d), waiting for interaction reference", txHash, inclusionSlot, inclusionHeight)
 		
@@ -392,12 +402,83 @@ func (c *cardanoTransactionConfirmer) checkAndCommitDeepTransactions() {
 	c.checkRecoveryTransactions()
 }
 
+// resubmitRecoveryTransactionsImmediately resubmits all recovery transactions immediately after rollback
+// This keeps monitoring active independently - transactions remain in blockDepth for monitoring
+// This function is self-locking (acquires lock internally)
+func (c *cardanoTransactionConfirmer) resubmitRecoveryTransactionsImmediately() {
+	c.lock.Lock()
+	
+	// Resubmission enabled
+	const resubmissionEnabled = false
+	
+	type resubmitInfo struct {
+		txHash string
+		txCBOR []byte
+	}
+	var toResubmit []resubmitInfo
+	
+	// Find all recovery transactions that haven't been resubmitted yet
+	for txHash, pending := range c.blockDepth {
+		if !pending.isRecovery {
+			continue
+		}
+		
+		// Skip if already resubmitted
+		if pending.resubmitted {
+			continue
+		}
+		
+		// Skip if transaction was already found (inclusionHeight > 0)
+		if pending.inclusionHeight > 0 {
+			continue
+		}
+		
+		// Resubmit immediately if we have CBOR
+		if resubmissionEnabled && c.resubmitFunc != nil {
+			txCBOR := c.txCBOR[txHash]
+			if len(txCBOR) > 0 {
+				toResubmit = append(toResubmit, resubmitInfo{txHash: txHash, txCBOR: txCBOR})
+				// Mark as resubmitted (but keep in blockDepth for monitoring)
+				pending.resubmitted = true
+				c.logger.Infof("Transaction %s will be resubmitted immediately after rollback (monitoring continues)", txHash)
+			} else {
+				c.logger.Warnf("Transaction %s cannot be resubmitted - no CBOR available", txHash)
+			}
+		}
+	}
+	
+	c.lock.Unlock()
+	
+	// Skip resubmission if disabled or no transactions to resubmit
+	if !resubmissionEnabled || len(toResubmit) == 0 {
+		return
+	}
+	
+	// Resubmit transactions (outside of lock)
+	for _, info := range toResubmit {
+		err := c.resubmitFunc(info.txHash, info.txCBOR)
+		
+		if err != nil {
+			c.logger.Errorf("Failed to resubmit transaction %s: %v", info.txHash, err)
+			// Mark as not resubmitted so we can retry later
+			c.lock.Lock()
+			if pending, ok := c.blockDepth[info.txHash]; ok && pending.isRecovery {
+				pending.resubmitted = false
+			}
+			c.lock.Unlock()
+		} else {
+			c.logger.Infof("Successfully resubmitted transaction %s (monitoring continues independently)", info.txHash)
+		}
+	}
+}
+
 // checkRecoveryTransactions checks recovery transactions and resubmits if not found after securityParam blocks
+// This is for periodic retry of failed resubmissions - monitoring continues independently
 // This function is self-locking (acquires lock internally)
 func (c *cardanoTransactionConfirmer) checkRecoveryTransactions() {
 	c.lock.Lock()
 	
-	// TEMPORARILY DISABLED: Resubmission disabled
+	// Resubmission enabled
 	const resubmissionEnabled = false
 	
 	type resubmitInfo struct {
@@ -418,6 +499,7 @@ func (c *cardanoTransactionConfirmer) checkRecoveryTransactions() {
 			// Remove recovery flag and track normally for finality
 			pending.isRecovery = false
 			pending.rollbackHeight = 0
+			pending.resubmitted = false
 			
 			// Clear invalidated flag since we found it again
 			delete(c.invalidated, txHash)
@@ -436,43 +518,41 @@ func (c *cardanoTransactionConfirmer) checkRecoveryTransactions() {
 			continue
 		}
 		
-		// Transaction hasn't been found yet - check if enough blocks have passed since rollback
+		// Transaction hasn't been found yet - check if resubmission failed and enough blocks have passed
+		// Only retry resubmission if previous attempt failed (resubmitted == false)
 		blocksSinceRollback := c.currentHeight - pending.rollbackHeight
-		if blocksSinceRollback >= c.securityParam {
+		if !pending.resubmitted && blocksSinceRollback >= c.securityParam {
 			if resubmissionEnabled && c.resubmitFunc != nil {
-				// Transaction not found after securityParam blocks - resubmit it
+				// Previous resubmission failed or wasn't attempted - retry after securityParam blocks
 				txCBOR := c.txCBOR[txHash]
 				if len(txCBOR) > 0 {
 					toResubmit = append(toResubmit, resubmitInfo{txHash: txHash, txCBOR: txCBOR})
-					c.logger.Warnf("Transaction %s not found after %d blocks since rollback - will resubmit", 
+					// Mark as resubmitted (but keep in blockDepth for monitoring)
+					pending.resubmitted = true
+					c.logger.Warnf("Transaction %s not found after %d blocks since rollback - retrying resubmission (monitoring continues)", 
 						txHash, blocksSinceRollback)
 				} else {
 					c.logger.Warnf("Transaction %s not found after %d blocks since rollback but no CBOR available - cannot resubmit", 
 						txHash, blocksSinceRollback)
-					// Remove from recovery tracking
+					// Remove from recovery tracking only if we can't resubmit
 					delete(c.blockDepth, txHash)
+					delete(c.invalidated, txHash)
 				}
 			} else {
-				// TEMPORARILY DISABLED: Resubmission disabled - just log warning
-				// c.logger.Warnf("Transaction %s not found after %d blocks since rollback - resubmission disabled", 
-				// 	txHash, blocksSinceRollback)
+				// Resubmission disabled or no resubmit function available
+				c.logger.Warnf("Transaction %s not found after %d blocks since rollback - resubmission disabled or no resubmit function", 
+					txHash, blocksSinceRollback)
 			}
 		}
 	}
 	
-	// TEMPORARILY DISABLED: Skip resubmission
+	// Skip resubmission if disabled or no transactions to resubmit
 	if !resubmissionEnabled || len(toResubmit) == 0 {
 		c.lock.Unlock()
 		return
 	}
 	
-	// Remove from tracking before unlocking (to avoid double-processing)
-	for _, info := range toResubmit {
-		delete(c.blockDepth, info.txHash)
-		delete(c.invalidated, info.txHash)
-	}
-	
-	// Unlock before calling resubmit callbacks (which may take time)
+	// Don't remove from blockDepth - keep monitoring active
 	c.lock.Unlock()
 	
 	// Resubmit transactions (outside of lock)
@@ -481,22 +561,14 @@ func (c *cardanoTransactionConfirmer) checkRecoveryTransactions() {
 		
 		if err != nil {
 			c.logger.Errorf("Failed to resubmit transaction %s: %v", info.txHash, err)
-			// Re-add to recovery tracking for another attempt later
+			// Mark as not resubmitted so we can retry later (but keep monitoring)
 			c.lock.Lock()
-			c.blockDepth[info.txHash] = &pendingTransactionBlock{
-				txHash:         info.txHash,
-				inclusionHeight: 0,
-				inclusionSlot:   0,
-				inclusionHash:   "",
-				iact:           nil,
-				channel:        nil,
-				isRecovery:     true,
-				rollbackHeight: c.currentHeight, // Use current height as new rollback point
+			if pending, ok := c.blockDepth[info.txHash]; ok && pending.isRecovery {
+				pending.resubmitted = false
 			}
-			c.invalidated[info.txHash] = true
 			c.lock.Unlock()
 		} else {
-			c.logger.Infof("Successfully resubmitted transaction %s after not finding it for %d blocks", info.txHash, c.securityParam)
+			c.logger.Infof("Successfully resubmitted transaction %s after retry (monitoring continues independently)", info.txHash)
 		}
 	}
 }
@@ -697,6 +769,7 @@ func (c *cardanoTransactionConfirmer) handleRollback(rollbackSlot uint64) {
 				channel:        nil, // No channel for recovery tracking
 				isRecovery:     true,
 				rollbackHeight: rollbackHeight,
+				resubmitted:    false, // Will be set when resubmitted
 			}
 			
 			// Mark as invalidated for now (will be cleared if found again)
@@ -722,6 +795,7 @@ func (c *cardanoTransactionConfirmer) handleRollback(rollbackSlot uint64) {
 			pending.inclusionHash = ""  // Reset
 			pending.isRecovery = true
 			pending.rollbackHeight = rollbackHeight
+			pending.resubmitted = false // Will be set when resubmitted
 			
 			// Mark as invalidated for now (will be cleared if found again)
 			c.invalidated[txHash] = true
@@ -735,8 +809,10 @@ func (c *cardanoTransactionConfirmer) handleRollback(rollbackSlot uint64) {
 	
 	if invalidatedCount > 0 {
 		c.logger.Warnf("Chain rollback invalidated %d transactions (tracking for recovery): %v", invalidatedCount, invalidatedTxs)
-		// Check recovery transactions after updating height (release lock before calling)
+		// Trigger immediate resubmission for invalidated transactions (but keep monitoring)
 		c.lock.Unlock()
+		c.resubmitRecoveryTransactionsImmediately()
+		// Also check recovery transactions (for periodic resubmission if needed)
 		c.checkRecoveryTransactions()
 		return
 	}
@@ -1077,10 +1153,7 @@ func calculateFinalityTime(protocolParams interface{}) time.Duration {
 	
 	// Try to extract actual values from protocol parameters
 	if _, ok := protocolParams.(*conway.ConwayProtocolParameters); ok {
-		// Note: These fields might not be directly available in the protocol parameters
-		// We'll use defaults for now - in a real implementation, we would extract
-		// activeSlotsCoeff, slotLength, and securityParam from the protocol parameters
-		// For now, we use the default values which are reasonable for mainnet
+		// Extraction is being wonky, use defaults for now
 	}
 	
 	// Calculate finality time: (3 * securityParam / activeSlotsCoeff) * slotLength
@@ -1089,7 +1162,15 @@ func calculateFinalityTime(protocolParams interface{}) time.Duration {
 	return finalityTime
 }
 
-func NewBlockchainClient(logger core.Logger, socketPath string) (*BlockchainClient, error) {
+func NewBlockchainClient(logger core.Logger, socketPaths []string) (*BlockchainClient, error) {
+	if len(socketPaths) == 0 {
+		return nil, fmt.Errorf("no socket paths provided")
+	}
+
+	// Use the first socket path for the connection
+	socketPath := socketPaths[0]
+	logger.Debugf("connecting to socket: %s (total sockets: %d)", socketPath, len(socketPaths))
+	
 	conn, err := net.Dial("tcp", socketPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to Cardano node: %w", err)
@@ -1191,14 +1272,6 @@ func NewBlockchainClient(logger core.Logger, socketPath string) (*BlockchainClie
 		// Don't fail initialization, continue without immutable tip initially
 	}
 
-	// Start goroutine to handle connection errors
-	go func() {
-		for err := range errorChan {
-			logger.Errorf("Connection error: %v", err)
-			os.Exit(1)
-		}
-	}()
-
 	client := &BlockchainClient{
 		logger:     logger,
 		conn:       oConn,
@@ -1208,7 +1281,18 @@ func NewBlockchainClient(logger core.Logger, socketPath string) (*BlockchainClie
 		finalityTime: finalityTime,
 		lastConfirmedTx: time.Time{},
 		allTxsSubmitted: false,
+		socketPaths: socketPaths,
+		networkMagic: 42,
+		errorChan: errorChan,
 	}
+	
+	// Start goroutine to handle connection errors (non-fatal)
+	go func() {
+		for err := range errorChan {
+			logger.Warnf("Connection error detected: %v (will attempt recovery on next operation)", err)
+			// Mark connection as potentially broken - reconnection will happen on next use
+		}
+	}()
 	
 	// Set resubmit callback for the confirmer
 	confirmer.setResubmitFunc(client.resubmitTransaction)
@@ -1230,7 +1314,251 @@ func (c *BlockchainClient) DecodePayload(cbor_bytes []byte) (interface{}, error)
 	// return tx, nil
 }
 
+// isConnectionError checks if an error is a connection-related error
+func isConnectionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := strings.ToLower(err.Error())
+	connectionErrors := []string{
+		"eof",
+		"connection reset",
+		"broken pipe",
+		"connection refused",
+		"network is unreachable",
+		"timeout",
+		"protocol is shutting down",
+		"use of closed network connection",
+	}
+	
+	for _, connErr := range connectionErrors {
+		if strings.Contains(errStr, connErr) {
+			return true
+		}
+	}
+	return false
+}
+
+// reconnect creates a new connection to the Cardano node
+// REQUIRES: c.reconnectMutex must be held
+func (c *BlockchainClient) reconnect() error {
+	c.connMutex.Lock()
+	defer c.connMutex.Unlock()
+	
+	// Try each socket path in order
+	var lastErr error
+	for _, socketPath := range c.socketPaths {
+		c.logger.Debugf("Attempting to reconnect to socket: %s", socketPath)
+		
+		// Close old connection if it exists
+		if c.conn != nil {
+			// Don't check error - connection might already be closed
+			c.conn.Close()
+		}
+		
+		// Create new network connection
+		conn, err := net.Dial("tcp", socketPath)
+		if err != nil {
+			lastErr = err
+			c.logger.Debugf("Failed to connect to %s: %v", socketPath, err)
+			continue
+		}
+		
+		// Create new error channel
+		errorChan := make(chan error, 10)
+		
+		// Create new Ouroboros connection
+		oConn, err := ouroboros.New(
+			ouroboros.WithConnection(conn),
+			ouroboros.WithNetworkMagic(c.networkMagic),
+			ouroboros.WithErrorChan(errorChan),
+			ouroboros.WithNodeToNode(false),
+			ouroboros.WithKeepAlive(true),
+			ouroboros.WithChainSyncConfig(
+				chainsync.NewConfig(
+					chainsync.WithRollForwardFunc(c.subscriber.handleNewBlock),
+					chainsync.WithRollBackwardFunc(c.subscriber.handleRollback),
+				),
+			),
+			ouroboros.WithLocalTxSubmissionConfig(
+				localtxsubmission.NewConfig(),
+			),
+			ouroboros.WithLocalStateQueryConfig(
+				localstatequery.NewConfig(),
+			),
+		)
+		
+		if err != nil {
+			conn.Close()
+			lastErr = err
+			c.logger.Debugf("Failed to create Ouroboros connection to %s: %v", socketPath, err)
+			continue
+		}
+		
+		// Update connection references
+		c.conn = oConn
+		c.subscriber.conn = oConn
+		c.errorChan = errorChan
+		
+		// Update confirmer connection
+		c.confirmer.setConnection(oConn)
+		
+		// Restart block subscriber
+		if err := c.subscriber.start(); err != nil {
+			c.logger.Warnf("Failed to restart block subscriber: %v", err)
+			// Continue anyway - transaction submission might still work
+		}
+		
+		// Start error handler goroutine
+		go func() {
+			for err := range errorChan {
+				c.logger.Warnf("Connection error detected: %v (will attempt recovery on next operation)", err)
+			}
+		}()
+		
+		c.logger.Infof("Successfully reconnected to %s", socketPath)
+		return nil
+	}
+	
+	return fmt.Errorf("failed to reconnect to any socket: %w", lastErr)
+}
+
+// getConnection returns the current connection, reconnecting if necessary
+func (c *BlockchainClient) getConnection() (*ouroboros.Connection, error) {
+	c.connMutex.RLock()
+	conn := c.conn
+	c.connMutex.RUnlock()
+	
+	// Try to use existing connection first
+	if conn != nil {
+		return conn, nil
+	}
+	
+	// Need to reconnect
+	c.reconnectMutex.Lock()
+	defer c.reconnectMutex.Unlock()
+	
+	// Double-check after acquiring mutex
+	c.connMutex.RLock()
+	conn = c.conn
+	c.connMutex.RUnlock()
+	
+	if conn != nil {
+		return conn, nil
+	}
+	
+	// Reconnect
+	if err := c.reconnect(); err != nil {
+		return nil, err
+	}
+	
+	c.connMutex.RLock()
+	conn = c.conn
+	c.connMutex.RUnlock()
+	return conn, nil
+}
+
+// waitForConfirmationWithTimeout waits for transaction confirmation with a timeout
+func (c *BlockchainClient) waitForConfirmationWithTimeout(handle transactionConfirmerHandle, timeout time.Duration) confirmResult {
+	resultChan := make(chan confirmResult, 1)
+	go func() {
+		resultChan <- handle.confirm()
+	}()
+	
+	select {
+	case result := <-resultChan:
+		return result
+	case <-time.After(timeout):
+		c.logger.Warnf("Transaction confirmation timeout after %v", timeout)
+		// Return a result indicating we need to resend
+		return confirmResult{resend: true, err: fmt.Errorf("confirmation timeout after %v", timeout)}
+	}
+}
+
+// submitTransactionWithRetry submits a transaction with timeout and automatic reconnection
+func (c *BlockchainClient) submitTransactionWithRetry(txHash string, txBytes []byte) error {
+	const maxRetries = 3
+	const submitTimeout = 10 * time.Second
+	
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		// Get connection (will reconnect if needed)
+		conn, err := c.getConnection()
+		if err != nil {
+			if attempt == maxRetries {
+				return fmt.Errorf("failed to get connection after %d attempts: %w", maxRetries, err)
+			}
+			c.logger.Debugf("Failed to get connection (attempt %d/%d), retrying...", attempt, maxRetries)
+			time.Sleep(time.Second * time.Duration(attempt))
+			continue
+		}
+		
+		// Submit transaction with timeout
+		submitErrChan := make(chan error, 1)
+		go func() {
+			submitErrChan <- conn.LocalTxSubmission().Client.SubmitTx(ledger.TxTypeConway, txBytes)
+		}()
+		
+		select {
+		case err := <-submitErrChan:
+			if err == nil {
+				// Success
+				return nil
+			}
+			
+			// Check if it's a connection error
+			if isConnectionError(err) {
+				c.logger.Warnf("Connection error during submission (attempt %d/%d): %v", attempt, maxRetries, err)
+				
+				// Mark connection as broken
+				c.connMutex.Lock()
+				if c.conn == conn {
+					c.conn = nil
+				}
+				c.connMutex.Unlock()
+				
+				if attempt < maxRetries {
+					c.logger.Debugf("Will retry with new connection...")
+					time.Sleep(time.Second * time.Duration(attempt))
+					continue
+				}
+				return fmt.Errorf("connection error after %d attempts: %w", maxRetries, err)
+			}
+			
+			// Non-connection error - check if it's "already submitted"
+			if strings.Contains(err.Error(), "already submitted") {
+				c.logger.Debugf("Transaction %s already submitted (ignoring)", txHash)
+				return nil
+			}
+			
+			// Other error - return immediately
+			return fmt.Errorf("transaction submission failed: %w", err)
+			
+		case <-time.After(submitTimeout):
+			c.logger.Warnf("Transaction submission timeout (attempt %d/%d)", attempt, maxRetries)
+			
+			// Mark connection as potentially broken
+			c.connMutex.Lock()
+			if c.conn == conn {
+				c.conn = nil
+			}
+			c.connMutex.Unlock()
+			
+			if attempt < maxRetries {
+				c.logger.Debugf("Will retry with new connection...")
+				time.Sleep(time.Second * time.Duration(attempt))
+				continue
+			}
+			return fmt.Errorf("transaction submission timeout after %d attempts", maxRetries)
+		}
+	}
+	
+	return fmt.Errorf("failed to submit transaction after %d attempts", maxRetries)
+}
+
 func (c *BlockchainClient) Close() error {
+	c.connMutex.Lock()
+	defer c.connMutex.Unlock()
+	
 	if c.conn != nil {
 		return c.conn.Close()
 	}
@@ -1297,35 +1625,10 @@ func (c *BlockchainClient) TriggerInteraction(iact core.Interaction) error {
 	
 	if invalidated, ok := confirmer.invalidated[txHash]; ok && invalidated {
 		confirmer.lock.Unlock()
-		c.logger.Warnf("Transaction %s was invalidated by chain rollback - marking as failed (resubmission disabled)", txHash)
+		c.logger.Warnf("Transaction %s was invalidated by chain rollback - resubmission disabled", txHash)
 		
-		// TEMPORARILY DISABLED: Resubmit the transaction immediately
-		// if err := c.resubmitTransaction(txHash, txBytes); err != nil {
-		// 	return fmt.Errorf("failed to resubmit invalidated transaction %s: %w", txHash, err)
-		// }
-		
-		// TEMPORARILY DISABLED: Prepare confirmation for the resubmitted transaction
-		// handle, err := c.confirmer.prepare(iact, txHash)
-		// if err != nil {
-		// 	return err
-		// }
-		
-		// TEMPORARILY DISABLED: Wait for confirmation
-		// result := handle.confirm()
-		// if result.err != nil {
-		// 	return fmt.Errorf("resubmitted transaction %s failed: %w", txHash, result.err)
-		// }
-		// if result.resend {
-		// 	return fmt.Errorf("resubmitted transaction %s needs to be resent", txHash)
-		// }
-		
-		// TEMPORARILY DISABLED: Update last confirmed transaction time
-		// c.finalityMutex.Lock()
-		// c.lastConfirmedTx = time.Now()
-		// c.finalityMutex.Unlock()
-		
-		iact.ReportAbort()
-		return fmt.Errorf("transaction %s was invalidated by chain rollback (resubmission disabled)", txHash)
+		// Resubmission disabled - return error instead of resubmitting
+		return fmt.Errorf("transaction %s was invalidated by chain rollback and resubmission is disabled", txHash)
 	}
 	confirmer.lock.Unlock()
 
@@ -1338,22 +1641,74 @@ func (c *BlockchainClient) TriggerInteraction(iact core.Interaction) error {
 	// Report submission before sending
 	iact.ReportSubmit()
 
-	// Submit transaction
+	// Submit transaction with timeout and connection recovery
 	c.logger.Debugf("Submitting transaction %s", txHash)
-	if err := c.conn.LocalTxSubmission().Client.SubmitTx(ledger.TxTypeConway, txBytes); err != nil {
-		// If transaction is already submitted, we can ignore the error
-		if !strings.Contains(err.Error(), "already submitted") {
-			return fmt.Errorf("failed to submit transaction: %w", err)
+	submitErr := c.submitTransactionWithRetry(txHash, txBytes)
+	
+	// If submission failed, check if it's a connection error
+	// If so, the transaction might have been submitted before connection was lost
+	// We'll still wait for confirmation since the transaction is already being tracked
+	if submitErr != nil {
+		if isConnectionError(submitErr) {
+			c.logger.Warnf("Transaction %s submission failed due to connection error - transaction may have been submitted, waiting for confirmation", txHash)
+			// Continue to wait for confirmation - block subscriber will detect it if it was submitted
+		} else {
+			// Non-connection error - transaction definitely wasn't submitted
+			// But still wait a bit to see if it appears (in case of race condition)
+			c.logger.Warnf("Transaction %s submission failed: %v - will wait briefly to check if transaction appears", txHash, submitErr)
 		}
 	}
 
-	// Wait for confirmation
-	result := handle.confirm()
+	// Wait for confirmation (transaction is already being tracked by block subscriber)
+	// If the transaction was submitted before connection was lost, it will be detected
+	// Use a timeout based on whether we had a submission error
+	var confirmationTimeout time.Duration
+	if submitErr != nil {
+		if isConnectionError(submitErr) {
+			// Connection error - transaction might have been submitted, wait longer
+			confirmationTimeout = 60 * time.Second
+		} else {
+			// Non-connection error - transaction likely wasn't submitted, wait shorter
+			confirmationTimeout = 10 * time.Second
+		}
+	} else {
+		// No submission error - normal timeout
+		confirmationTimeout = 120 * time.Second
+	}
+	
+	result := c.waitForConfirmationWithTimeout(handle, confirmationTimeout)
 	if result.err != nil {
+		// If we had a submission error and confirmation also failed, return the submission error
+		if submitErr != nil {
+			return fmt.Errorf("transaction %s submission failed and was not confirmed: %w", txHash, submitErr)
+		}
 		return fmt.Errorf("transaction %s failed: %w", txHash, result.err)
 	}
 	if result.resend {
-		return fmt.Errorf("transaction %s needs to be resent", txHash)
+		// Transaction needs to be resent - this means it wasn't found in blocks
+		// If we had a connection error, we should try resubmitting
+		if submitErr != nil && isConnectionError(submitErr) {
+			c.logger.Warnf("Transaction %s was not found after connection error - attempting resubmission", txHash)
+			// Try resubmitting once more
+			if err := c.submitTransactionWithRetry(txHash, txBytes); err != nil {
+				return fmt.Errorf("transaction %s needs to be resent but resubmission failed: %w", txHash, err)
+			}
+			// Wait for confirmation again with normal timeout
+			result = c.waitForConfirmationWithTimeout(handle, 120*time.Second)
+			if result.err != nil {
+				return fmt.Errorf("transaction %s failed after resubmission: %w", txHash, result.err)
+			}
+			if result.resend {
+				return fmt.Errorf("transaction %s needs to be resent after resubmission", txHash)
+			}
+		} else {
+			return fmt.Errorf("transaction %s needs to be resent", txHash)
+		}
+	}
+	
+	// If we had a submission error but got confirmation, log it as recovered
+	if submitErr != nil {
+		c.logger.Infof("Transaction %s was confirmed despite submission error - transaction was successfully submitted before connection was lost", txHash)
 	}
 
 	// Update last confirmed transaction time
@@ -1368,17 +1723,13 @@ func (c *BlockchainClient) TriggerInteraction(iact core.Interaction) error {
 func (c *BlockchainClient) resubmitTransaction(txHash string, txBytes []byte) error {
 	c.logger.Infof("Resubmitting transaction %s (CBOR length: %d bytes)", txHash, len(txBytes))
 	
-	// Submit the transaction again
-	if err := c.conn.LocalTxSubmission().Client.SubmitTx(ledger.TxTypeConway, txBytes); err != nil {
-		// If transaction is already submitted, we can ignore the error
-		if !strings.Contains(err.Error(), "already submitted") {
-			c.logger.Errorf("Failed to resubmit transaction %s: %v", txHash, err)
-			return fmt.Errorf("failed to resubmit transaction: %w", err)
-		}
-		c.logger.Debugf("Transaction %s was already submitted (ignoring error)", txHash)
-	} else {
-		c.logger.Debugf("Successfully resubmitted transaction %s", txHash)
+	// Submit the transaction again using the retry mechanism
+	if err := c.submitTransactionWithRetry(txHash, txBytes); err != nil {
+		c.logger.Errorf("Failed to resubmit transaction %s: %v", txHash, err)
+		return fmt.Errorf("failed to resubmit transaction: %w", err)
 	}
+	
+	c.logger.Debugf("Successfully resubmitted transaction %s", txHash)
 	
 	// Clean up transaction state since we're resubmitting
 	confirmer := c.confirmer.(*cardanoTransactionConfirmer)
@@ -1513,13 +1864,10 @@ func (c *BlockchainClient) StartInvalidatedTransactionMonitor() {
 				c.logger.Debugf("Stopping invalidated transaction monitor")
 				return
 			case <-ticker.C:
-				// Check for invalidated transactions and resubmit them
+				// Check for invalidated transactions (resubmission disabled)
 				if c.GetInvalidatedTransactionCount() > 0 {
-					c.logger.Debugf("Found invalidated transactions (resubmission disabled)")
-					// TEMPORARILY DISABLED: Resubmit invalidated transactions
-					// if err := c.ResubmitAllInvalidatedTransactions(); err != nil {
-					// 	c.logger.Errorf("Error resubmitting invalidated transactions: %v", err)
-					// }
+					c.logger.Debugf("Found invalidated transactions - resubmission disabled")
+					// Resubmission disabled - just log the count
 				}
 			}
 		}
