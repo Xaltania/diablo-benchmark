@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net"
-	"os"
 	"reflect"
 	"strings"
 	"sync"
@@ -42,6 +41,18 @@ type BlockchainClient struct {
 	connMutex      sync.RWMutex
 	errorChan      chan error
 	reconnectMutex sync.Mutex
+	
+	// Uncommitted transaction tracking (for resubmission when commits resume)
+	uncommittedTxs map[string]*uncommittedTransaction
+	uncommittedMutex sync.Mutex
+	lastCommitTime   time.Time // Track when we last saw a commit
+}
+
+type uncommittedTransaction struct {
+	txHash     string
+	txBytes    []byte
+	iact       core.Interaction
+	submitTime time.Time // Original submission time (already set via ReportSubmit)
 }
 
 type transactionConfirmer interface {
@@ -51,6 +62,7 @@ type transactionConfirmer interface {
 	storeTxCBOR(string, []byte)
 	setResubmitFunc(func(string, []byte) error) // Set callback to resubmit transactions
 	setConnection(*ouroboros.Connection)
+	setCommitCallback(func(string)) // Set callback to notify when commits happen (txHash)
 	updateImmutableTip() error // For metrics/telemetry only
 	checkFinality() // Deprecated - kept for interface compatibility
 }
@@ -76,6 +88,7 @@ type cardanoTransactionConfirmer struct {
 	currentHeight   uint64                               // Current chain height (block count)
 	slot2height     map[uint64]uint64                    // Map slot -> height for rollback handling
 	resubmitFunc    func(string, []byte) error           // Callback to resubmit transactions
+	commitCallback  func(string)                          // Callback to notify when commits happen (txHash)
 	immutableTipSlot uint64                              // Current immutable tip slot (for finality checking)
 	conn            *ouroboros.Connection                // Connection for querying immutable tip
 	lock            sync.Mutex
@@ -179,24 +192,25 @@ func (c *cardanoTransactionConfirmer) prepare(
 		return pending, nil
 	}
 
-	// Check if transaction is already in blockDepth (found in a block but not finalized yet)
+	// Check if transaction is already in blockDepth (found in a block)
 	if blockPending, ok := c.blockDepth[txHash]; ok {
 		blockPending.iact = iact
 		blockPending.channel = channel
 		
-		if c.isFinalized(blockPending.inclusionHeight) {
-			txCBOR := c.txCBOR[txHash]
-			c.lock.Unlock()
-			c.commitTransactionFromPending(blockPending, txCBOR)
-			return pending, nil
-		}
-		
+		// Wait for finality depth before committing
 		if blockPending.inclusionHeight > 0 {
+			if c.isFinalized(blockPending.inclusionHeight) {
+				txCBOR := c.txCBOR[txHash]
+				c.lock.Unlock()
+				c.commitTransactionFromPending(blockPending, txCBOR)
+				return pending, nil
+			}
+			
 			depth := c.currentHeight - blockPending.inclusionHeight
 			c.logger.Debugf("Transaction %s associated with interaction, waiting for finality (height: %d, depth: %d/%d)", 
 				txHash, blockPending.inclusionHeight, depth, c.getFinalityDepthThreshold())
 		} else {
-			c.logger.Debugf("Transaction %s associated with interaction, waiting for inclusion height", txHash)
+			c.logger.Debugf("Transaction %s associated with interaction, waiting for inclusion in block", txHash)
 		}
 		return pending, nil
 	}
@@ -237,10 +251,13 @@ func (c *cardanoTransactionConfirmer) reportTransaction(txHash string, inclusion
 		pending.inclusionHeight = inclusionHeight
 		pending.inclusionSlot = inclusionSlot
 		pending.inclusionHash = blockHash
+		pending.isRecovery = false
+		pending.rollbackHeight = 0
 		
 		// Clear invalidated flag since we found it again
 		delete(c.invalidated, txHash)
 		
+		// Wait for finality depth before committing
 		if c.isFinalized(inclusionHeight) {
 			c.lock.Unlock()
 			c.commitTransaction(txHash, inclusionSlot, blockHash, pending.iact, txCBOR)
@@ -250,8 +267,6 @@ func (c *cardanoTransactionConfirmer) reportTransaction(txHash string, inclusion
 			return
 		}
 		
-		pending.isRecovery = false
-		pending.rollbackHeight = 0
 		depth := c.currentHeight - inclusionHeight
 		c.logger.Debugf("Recovery transaction %s found again in block %d (height %d), waiting for finality (depth: %d/%d)", 
 			txHash, inclusionSlot, inclusionHeight, depth, c.getFinalityDepthThreshold())
@@ -275,6 +290,7 @@ func (c *cardanoTransactionConfirmer) reportTransaction(txHash string, inclusion
 			resubmitted:    false,
 		}
 		
+		// Wait for finality depth before committing
 		if c.isFinalized(inclusionHeight) {
 			c.lock.Unlock()
 			c.commitTransaction(txHash, inclusionSlot, blockHash, pending.iact, txCBOR)
@@ -292,7 +308,8 @@ func (c *cardanoTransactionConfirmer) reportTransaction(txHash string, inclusion
 
 	// If not in pending, check if we already have it in blockDepth (was found before prepare was called)
 	if _, exists := c.blockDepth[txHash]; !exists {
-		// Add to blockDepth for future finality check (we'll have interaction reference later)
+		// Add to blockDepth for tracking (we'll have interaction reference later)
+		// Note: We'll check finality when prepare() is called with the interaction
 		c.blockDepth[txHash] = &pendingTransactionBlock{
 			txHash:         txHash,
 			inclusionHeight: inclusionHeight,
@@ -305,6 +322,7 @@ func (c *cardanoTransactionConfirmer) reportTransaction(txHash string, inclusion
 		}
 		c.logger.Tracef("Transaction %s found in block %d (height %d), waiting for interaction reference", txHash, inclusionSlot, inclusionHeight)
 		
+		// Check if already finalized (will commit when prepare() is called)
 		if c.isFinalized(inclusionHeight) {
 			c.lock.Unlock()
 			c.checkAndCommitDeepTransactions()
@@ -340,11 +358,60 @@ func (c *cardanoTransactionConfirmer) commitTransaction(txHash string, inclusion
 		iact.ReportCommit()
 	}
 	
+	// Notify that a commit happened (for resubmission logic)
+	if c.commitCallback != nil {
+		c.commitCallback(txHash)
+	}
+	
 	if inclusionHeight > 0 {
 		depth := currentHeight - inclusionHeight
 		c.logger.Debugf("Transaction %s committed (block %d, height %d, depth %d)", txHash, inclusionSlot, inclusionHeight, depth)
 	} else {
 		c.logger.Debugf("Transaction %s committed (block %d)", txHash, inclusionSlot)
+	}
+}
+
+// onCommitDetected is called when a commit is detected - checks if commits are resuming and resubmits uncommitted transactions
+func (c *BlockchainClient) onCommitDetected(txHash string) {
+	c.uncommittedMutex.Lock()
+	
+	// Remove the committed transaction from uncommitted list
+	delete(c.uncommittedTxs, txHash)
+	
+	now := time.Now()
+	timeSinceLastCommit := now.Sub(c.lastCommitTime)
+	c.lastCommitTime = now
+	
+	// If commits are resuming (we haven't seen a commit in a while, and now we see one)
+	// Resubmit all uncommitted transactions
+	shouldResubmit := timeSinceLastCommit > 5*time.Second && len(c.uncommittedTxs) > 0
+	
+	if shouldResubmit {
+		uncommitted := make([]*uncommittedTransaction, 0, len(c.uncommittedTxs))
+		for _, utx := range c.uncommittedTxs {
+			uncommitted = append(uncommitted, utx)
+		}
+		c.uncommittedMutex.Unlock()
+		
+		c.logger.Infof("Commits resuming after %v - resubmitting %d uncommitted transactions (preserving original submit times)", timeSinceLastCommit, len(uncommitted))
+		
+		// Resubmit all uncommitted transactions
+		// ReportSubmit was already called for each, so original submit times are preserved
+		for _, utx := range uncommitted {
+			c.logger.Debugf("Resubmitting transaction %s (original submit time: %v)", utx.txHash, utx.submitTime)
+			
+			// Resubmit (ReportSubmit was already called, so time is preserved)
+			err := c.submitTransactionWithRetry(utx.txHash, utx.txBytes)
+			if err != nil {
+				c.logger.Warnf("Failed to resubmit transaction %s: %v", utx.txHash, err)
+				// Keep in uncommitted list for next resubmission attempt
+			} else {
+				c.logger.Debugf("Successfully resubmitted transaction %s (original submit time preserved: %v)", utx.txHash, utx.submitTime)
+				// Keep in uncommitted list until it's committed
+			}
+		}
+	} else {
+		c.uncommittedMutex.Unlock()
 	}
 }
 
@@ -361,8 +428,6 @@ func (c *cardanoTransactionConfirmer) commitTransactionFromPending(pending *pend
 func (c *cardanoTransactionConfirmer) checkAndCommitDeepTransactions() {
 	c.lock.Lock()
 	
-	// threshold := c.getFinalityDepthThreshold()
-	// currentHeight := c.currentHeight
 	var toCommit []*pendingTransactionBlock
 	
 	// First pass: identify transactions to commit (skip recovery transactions)
@@ -398,7 +463,7 @@ func (c *cardanoTransactionConfirmer) checkAndCommitDeepTransactions() {
 		c.commitTransactionFromPending(info.pending, info.txCBOR)
 	}
 	
-	// Check recovery transactions after checking normal finality (checkRecoveryTransactions acquires its own lock)
+	// Check recovery transactions (checkRecoveryTransactions acquires its own lock)
 	c.checkRecoveryTransactions()
 }
 
@@ -496,7 +561,7 @@ func (c *cardanoTransactionConfirmer) checkRecoveryTransactions() {
 		// If transaction was found again (inclusionHeight > 0), handle it normally
 		if pending.inclusionHeight > 0 {
 			// Transaction was found again after rollback
-			// Remove recovery flag and track normally for finality
+			// Remove recovery flag
 			pending.isRecovery = false
 			pending.rollbackHeight = 0
 			pending.resubmitted = false
@@ -504,6 +569,7 @@ func (c *cardanoTransactionConfirmer) checkRecoveryTransactions() {
 			// Clear invalidated flag since we found it again
 			delete(c.invalidated, txHash)
 			
+			// Wait for finality depth before committing
 			if c.isFinalized(pending.inclusionHeight) {
 				txCBOR := c.txCBOR[txHash]
 				c.lock.Unlock()
@@ -604,6 +670,12 @@ func (c *cardanoTransactionConfirmer) setConnection(conn *ouroboros.Connection) 
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.conn = conn
+}
+
+func (c *cardanoTransactionConfirmer) setCommitCallback(fn func(string)) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.commitCallback = fn
 }
 
 // updateImmutableTip queries the immutable tip from the node using LocalStateQuery
@@ -1284,6 +1356,8 @@ func NewBlockchainClient(logger core.Logger, socketPaths []string) (*BlockchainC
 		socketPaths: socketPaths,
 		networkMagic: 42,
 		errorChan: errorChan,
+		uncommittedTxs: make(map[string]*uncommittedTransaction),
+		lastCommitTime: time.Now(),
 	}
 	
 	// Start goroutine to handle connection errors (non-fatal)
@@ -1296,6 +1370,9 @@ func NewBlockchainClient(logger core.Logger, socketPaths []string) (*BlockchainC
 	
 	// Set resubmit callback for the confirmer
 	confirmer.setResubmitFunc(client.resubmitTransaction)
+	
+	// Set commit callback to detect when commits resume
+	confirmer.setCommitCallback(client.onCommitDetected)
 	
 	// Start the invalidated transaction monitor
 	client.StartInvalidatedTransactionMonitor()
@@ -1417,6 +1494,7 @@ func (c *BlockchainClient) reconnect() error {
 		}()
 		
 		c.logger.Infof("Successfully reconnected to %s", socketPath)
+		
 		return nil
 	}
 	
@@ -1555,6 +1633,7 @@ func (c *BlockchainClient) submitTransactionWithRetry(txHash string, txBytes []b
 	return fmt.Errorf("failed to submit transaction after %d attempts", maxRetries)
 }
 
+
 func (c *BlockchainClient) Close() error {
 	c.connMutex.Lock()
 	defer c.connMutex.Unlock()
@@ -1638,24 +1717,34 @@ func (c *BlockchainClient) TriggerInteraction(iact core.Interaction) error {
 		return err
 	}
 
-	// Report submission before sending
+	// Report submission before sending (this sets the submission time)
+	// If submission fails and we resubmit later, this time will be preserved
 	iact.ReportSubmit()
+	originalSubmitTime := time.Now()
+	
+	// Track as uncommitted transaction (will be removed when committed)
+	// This allows us to resubmit all uncommitted transactions when commits resume
+	c.uncommittedMutex.Lock()
+	c.uncommittedTxs[txHash] = &uncommittedTransaction{
+		txHash:     txHash,
+		txBytes:    txBytes,
+		iact:       iact,
+		submitTime: originalSubmitTime,
+	}
+	c.uncommittedMutex.Unlock()
 
 	// Submit transaction with timeout and connection recovery
+	// Transactions will keep submitting even if node is down (they'll fail but we keep trying)
 	c.logger.Debugf("Submitting transaction %s", txHash)
 	submitErr := c.submitTransactionWithRetry(txHash, txBytes)
 	
-	// If submission failed, check if it's a connection error
-	// If so, the transaction might have been submitted before connection was lost
-	// We'll still wait for confirmation since the transaction is already being tracked
 	if submitErr != nil {
+		// Submission failed - transaction is still tracked as uncommitted
+		// It will be resubmitted when commits resume
 		if isConnectionError(submitErr) {
-			c.logger.Warnf("Transaction %s submission failed due to connection error - transaction may have been submitted, waiting for confirmation", txHash)
-			// Continue to wait for confirmation - block subscriber will detect it if it was submitted
+			c.logger.Warnf("Transaction %s submission failed due to connection error - will retry on next operation", txHash)
 		} else {
-			// Non-connection error - transaction definitely wasn't submitted
-			// But still wait a bit to see if it appears (in case of race condition)
-			c.logger.Warnf("Transaction %s submission failed: %v - will wait briefly to check if transaction appears", txHash, submitErr)
+			c.logger.Warnf("Transaction %s submission failed: %v", txHash, submitErr)
 		}
 	}
 
@@ -1684,6 +1773,13 @@ func (c *BlockchainClient) TriggerInteraction(iact core.Interaction) error {
 		}
 		return fmt.Errorf("transaction %s failed: %w", txHash, result.err)
 	}
+	
+	// Transaction confirmed - remove from uncommitted list
+	// (onCommitDetected callback will also remove it, but we do it here too for immediate cleanup)
+	c.uncommittedMutex.Lock()
+	delete(c.uncommittedTxs, txHash)
+	c.uncommittedMutex.Unlock()
+	
 	if result.resend {
 		// Transaction needs to be resent - this means it wasn't found in blocks
 		// If we had a connection error, we should try resubmitting
@@ -1887,3 +1983,4 @@ func (c *BlockchainClient) GetLastConfirmedTransactionTime() time.Time {
 	defer c.finalityMutex.Unlock()
 	return c.lastConfirmedTx
 }
+

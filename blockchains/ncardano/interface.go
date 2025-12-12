@@ -71,9 +71,13 @@ func (i *BlockchainInterface) Client(params map[string]string, env, view []strin
 		return nil, fmt.Errorf("no socket path provided")
 	}
 
-	logger.Tracef("using socket paths: %v", view)
+	if len(view) > 1 {
+		logger.Infof("creating client with %d assigned node(s): %v", len(view), view)
+	} else {
+		logger.Debugf("creating client with socket path: %v", view)
+	}
 
-	// Create the Cardano client
+	// Create the Cardano client (will try all socket paths for connection)
 	client, err := NewBlockchainClient(logger, view)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Cardano client: %w", err)
